@@ -1,0 +1,6 @@
+{"name": "self_only", "verifier": "topdown", "seed": 0}
+{"name": "self_only", "verifier": "topdown", "seed": 1}
+{"name": "self_only", "verifier": "topdown", "seed": 2}
+{"name": "self_only", "verifier": "classifier", "seed": 0}
+{"name": "self_only", "verifier": "classifier", "seed": 1}
+{"name": "self_only", "verifier": "classifier", "seed": 2}

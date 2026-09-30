@@ -1,0 +1,10 @@
+run_id,milestone,git_sha,config_hash,seed,status,wall_clock_s,updated
+oracle_topdown_b1.0_mc_c718cfe0b2_s0,m1,ba93c1c,c718cfe0b2,0,done,735,2026-10-01 02:22:12
+oracle_topdown_b1.0_mc_c718cfe0b2_s1,m1,ba93c1c,c718cfe0b2,1,done,726,2026-10-01 02:34:19
+oracle_topdown_b1.0_mc_c718cfe0b2_s2,m1,ba93c1c,c718cfe0b2,2,done,740,2026-10-01 02:46:41
+oracle_topdown_b1.0_mc_a18bedd4f0_s0,m1,ba93c1c,a18bedd4f0,0,done,754,2026-10-01 02:59:16
+oracle_topdown_b1.0_mc_a18bedd4f0_s1,m1,ba93c1c,a18bedd4f0,1,done,748,2026-10-01 03:11:45
+oracle_topdown_b1.0_mc_a18bedd4f0_s2,m1,ba93c1c,a18bedd4f0,2,done,746,2026-10-01 03:24:13
+frozen_selector_topdown_b1.0_mc_6930e2fa00_s0,m1,ba93c1c,6930e2fa00,0,done,736,2026-10-01 03:36:31
+frozen_selector_topdown_b1.0_mc_6930e2fa00_s1,m1,ba93c1c,6930e2fa00,1,done,732,2026-10-01 03:48:44
+frozen_selector_topdown_b1.0_mc_6930e2fa00_s2,m1,ba93c1c,6930e2fa00,2,done,728,2026-10-01 04:00:54
