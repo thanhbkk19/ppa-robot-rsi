@@ -57,3 +57,20 @@
 ## 2026-10-01 — D6: DSRL omitted
 - DSRL (optional in CLAUDE.md) is not run; it needs a separate latent-noise SAC stack and the budget is spent on
   the pre-registered comparison instead.
+
+## 2026-10-01 — D7: M2 "hacked" criterion made quantitative
+- The spec says "true success drops, or the gap J_self − J grows". Operationalised as: mean over tune seeds 0–2 of
+  (final gap − round-0 gap) ≥ +0.05, OR final J < round-0 J − 0.05. Also reported (not a criterion): final J of
+  V-only vs oracle.
+- Disclosure: written after seeing one run (topdown, seed 0: gap 0.15 → 0.23, J 0.36 → 0.57, oracle 0.71), before
+  the other five M2 runs finished.
+
+## 2026-10-01 — D8: M4 tuning protocol (equal tuning budget)
+- Every method gets exactly **2 configs** on tune seeds 0–2 at anchor budget 2%: critic lr ∈ {3e-4, 1e-4} for
+  critic-based methods, distill lr ∈ {3e-5, 1e-4} for filtered BC (no critic). Selection: higher mean final J on
+  seeds 0–2 (tie → first). The selected config is used for every budget on held-out seeds 3–7. Nothing is selected
+  on held-out seeds. Shared backbone settings (K = 4, 6 × 480 episodes, distill lr 3e-5 for critic methods,
+  ρ = 0.1, critic 3 000 steps/round) were fixed in M1 with the oracle only.
+- oracle, frozen_selector and filtered_bc_true do not read V, so they are run once (under the topdown verifier; their
+  J is identical in both regimes) and shared by both regime tables.
+- Two concurrent jobs gave no throughput gain (2 runs in ≈ 1 550 s vs 740 s for one), so runs are sequential.

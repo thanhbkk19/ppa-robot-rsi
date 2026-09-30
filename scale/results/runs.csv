@@ -8,3 +8,6 @@ oracle_topdown_b1.0_mc_a18bedd4f0_s2,m1,ba93c1c,a18bedd4f0,2,done,746,2026-10-01
 frozen_selector_topdown_b1.0_mc_6930e2fa00_s0,m1,ba93c1c,6930e2fa00,0,done,736,2026-10-01 03:36:31
 frozen_selector_topdown_b1.0_mc_6930e2fa00_s1,m1,ba93c1c,6930e2fa00,1,done,732,2026-10-01 03:48:44
 frozen_selector_topdown_b1.0_mc_6930e2fa00_s2,m1,ba93c1c,6930e2fa00,2,done,728,2026-10-01 04:00:54
+oracle_topdown_b1.0_mc_687e5cffbd_s0,m4tune,470b7b5,687e5cffbd,0,running,,2026-10-01 04:12:37
+self_only_topdown_b0.0_mc_64531b365f_s0,m2,470b7b5,64531b365f,0,done,1550,2026-10-01 04:38:02
+self_only_topdown_b0.0_mc_64531b365f_s1,m2,470b7b5,64531b365f,1,running,,2026-10-01 04:38:02

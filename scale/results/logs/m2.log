@@ -1,0 +1,15 @@
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[robosuite WARNING] No private macro file found! (macros.py:53)
+[robosuite WARNING] It is recommended to use a private macro file (macros.py:54)
+[robosuite WARNING] To setup, run: python /home/thanh-nguyen39/Gumiho/project/Robotic/ppa-robot-rsi/.venv/lib/python3.10/site-packages/robosuite/scripts/setup_macros.py (macros.py:55)
+/home/thanh-nguyen39/Gumiho/project/Robotic/ppa-robot-rsi/.venv/lib/python3.10/site-packages/gym/spaces/box.py:78: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+Created environment with name NutAssemblySquare
+Action size is 7
+Created environment with name NutAssemblySquare
+Action size is 7
+[04:12:09] start self_only_topdown_b0.0_mc_64531b365f_s0
+[04:38:02] done self_only_topdown_b0.0_mc_64531b365f_s0 J: 0.36 0.46 0.53 0.61 0.58 0.58 0.57
+[04:38:02] start self_only_topdown_b0.0_mc_64531b365f_s1
