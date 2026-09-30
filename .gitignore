@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+third_party/*/
+!third_party/.gitkeep
+data/
+datasets/
+checkpoints/
+*.pt
+*.ckpt
+*.hdf5
+*.mp4
+wandb/
+scale/results/**/raw/
+.pytest_cache/

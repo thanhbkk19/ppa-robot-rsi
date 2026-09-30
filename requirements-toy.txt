@@ -1,0 +1,5 @@
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+torch>=2.7      # RTX 5090 (Blackwell, sm_120) needs a CUDA >= 12.8 build
+pytest>=8

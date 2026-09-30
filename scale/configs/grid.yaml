@@ -1,0 +1,31 @@
+# M4 comparison grid (fill budgets from scale/BUDGET.md after M1 profiling)
+backbone: pa_rl                 # sample K from diffusion policy -> critic select -> distill
+tasks: [robomimic_square, robomimic_transport, robomimic_toolhang]
+K: 4                            # also sweep {2, 8} in M5
+rounds: TBD                     # from BUDGET.md
+episodes_per_round: TBD
+eval_episodes_per_round: 200    # never seen by any learner
+seeds:
+  tune: [0, 1, 2]
+  heldout: [3, 4, 5, 6, 7]
+verifiers:
+  - learned_classifier          # (a) trained on demos + few failures
+  - injected_fp_region          # (c) controlled false positives, reachable by the pretrained policy
+  # - vlm_judge                 # (b) optional
+anchor_budgets: [0.01, 0.02, 0.05]
+methods:
+  oracle:            {labels: true}
+  self_only:         {labels: self}
+  anchors_only:      {labels: anchor_only}
+  naive_mix:         {labels: naive_mix}
+  plugin_rm:         {labels: plugin, residual: learned}      # strongest practical baseline
+  ppa_dr_uniform:    {labels: dr, anchoring: uniform, residual: [none, learned]}
+  ppa_dr_claimed:    {labels: dr, anchoring: claimed, residual: [none, learned]}
+  filtered_bc:       {labels: [self, true]}
+  frozen_selector:   {labels: true, distill: false}
+  dsrl:              {labels: true, optional: true}
+critic_targets: [mc, td]        # C1 holds exactly for mc only
+metrics: [true_success, self_success, hacking_gap, anchors_used, wall_clock]
+verdict:
+  go:    "PPA(<=2%) within 0.05 of oracle AND >= plugin_rm + 0.10 in >=1 regime with invisible verifier failure"
+  no_go: "plugin_rm matches PPA in every regime"
