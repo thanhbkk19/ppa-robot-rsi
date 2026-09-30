@@ -1,0 +1,9 @@
+{"name": "oracle", "seed": 0, "distill_lr": 3e-05}
+{"name": "oracle", "seed": 1, "distill_lr": 3e-05}
+{"name": "oracle", "seed": 2, "distill_lr": 3e-05}
+{"name": "oracle", "seed": 0, "distill_lr": 0.0001}
+{"name": "oracle", "seed": 1, "distill_lr": 0.0001}
+{"name": "oracle", "seed": 2, "distill_lr": 0.0001}
+{"name": "frozen_selector", "seed": 0}
+{"name": "frozen_selector", "seed": 1}
+{"name": "frozen_selector", "seed": 2}

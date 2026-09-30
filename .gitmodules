@@ -1,0 +1,6 @@
+[submodule "third_party/PolicyAgnosticRL"]
+	path = third_party/PolicyAgnosticRL
+	url = https://github.com/MaxSobolMark/PolicyAgnosticRL
+[submodule "third_party/dppo"]
+	path = third_party/dppo
+	url = https://github.com/irom-lab/dppo
