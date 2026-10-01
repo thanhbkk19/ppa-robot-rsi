@@ -24,7 +24,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -258,8 +258,13 @@ def run(cfg, out=None):
         else:  # accumulate every round's executed chunks
             Sx, Ax = np.concatenate(DS), np.concatenate(DA)
         nm = int(c["rho"] * len(Sx)); i = rng.integers(0, len(Sd), nm)
+        prev = [p.detach().clone() for p in gen.parameters()] if c["expo"] > 0 else None
         gen.fit(np.concatenate([Sx, Sd[i]]), np.concatenate([Ax, Ad[i]]), c["distill_steps"],
                 c["seed"] * 100 + r, lr=c["distill_lr"])
+        if prev is not None:   # ExPO-style extrapolation along this round's update: theta += alpha (theta - theta_prev)
+            with torch.no_grad():
+                for p, q0 in zip(gen.parameters(), prev):
+                    p.add_(c["expo"] * (p - q0))
         extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"],
                      max_lift=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95)),
                      curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None,

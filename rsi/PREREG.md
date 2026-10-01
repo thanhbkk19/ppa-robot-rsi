@@ -179,3 +179,13 @@ Predictions:
 - Mechanism, reported whatever the outcome: lift per round increases with w (guidance extrapolates);
   v > 0 keeps action diversity higher than v = 0 at the same w; the fraction of success labels and the
   conditional-vs-unconditional gap show whether the model learns the outcome structure.
+
+## Amendment G (written before any expo run): extrapolation across rounds (idea C)
+P11 failed (see `rsi/results/P11_REPORT.md`). Only critic-argmax with K = 64 moves the frontier, and its
+frontier stalls near 10 cm. Method: after each distillation, θ ← θ + α(θ − θ_prev) (ExPO,
+weak-to-strong extrapolation), applied on top of argmax K = 64, filtered init, curriculum + HER, 10 rounds,
+seeds 0–2. α ∈ {0.5, 1.0}; the control α = 0 already exists (`takeoff_filt`).
+
+**P12:** with the better α, mean train lift p95 at round 5 ≥ control + 0.02 m, and at round 10 ≥ control
++ 0.03 m, without lower table-goal success (frontier bin 0) than the control at round 10.
+Mechanism to report: per-height success bins over rounds (frontier speed), table-goal retention, J_gen.
