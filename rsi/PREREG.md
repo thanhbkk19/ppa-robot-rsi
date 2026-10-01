@@ -189,3 +189,10 @@ seeds 0–2. α ∈ {0.5, 1.0}; the control α = 0 already exists (`takeoff_filt
 **P12:** with the better α, mean train lift p95 at round 5 ≥ control + 0.02 m, and at round 10 ≥ control
 + 0.03 m, without lower table-goal success (frontier bin 0) than the control at round 10.
 Mechanism to report: per-height success bins over rounds (frontier speed), table-goal retention, J_gen.
+
+## Verdicts for P11–P12 (take-off, seeds 0–2)
+| prediction | result | verdict |
+|---|---|---|
+| P11a CFG (w ≥ 2) takes off | 0 target success; lift ≤ 2.5 cm at every w | fails (M1: the CFG density ratio points down) |
+| P11b best CFG ≥ argmax K = 64 (filtered init) | 0.000 vs 0.018 | fails |
+| P12 ExPO speeds up the frontier | α = 0.5: r5 −0.017, r10 +0.018; α = 1.0 unstable | fails (amplifies a low-SNR update) |

@@ -208,9 +208,12 @@ def run(cfg, out=None):
         hts = curriculum_heights(len(seeds)) if c["curriculum"] else None
         S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"], h_range=c["train_h"],
                               heights=hts)
+        round_bins = None
         if edges is not None and "heights" in d:
             bi = np.clip(np.searchsorted(edges, d["heights"], side="right") - 1, 0, nb - 1)
             np.add.at(succ_n, bi, Y); np.add.at(tot_n, bi, 1.0)
+            cnt = np.bincount(bi, minlength=nb); sc = np.bincount(bi, weights=Y, minlength=nb)
+            round_bins = [round(float(a / b), 3) if b > 0 else None for a, b in zip(sc, cnt)]   # this round only
         m_last[0] = float(Y.mean())
         if c["her"]:
             # hindsight (final-state) relabelling: the achieved object position becomes the goal, and the episode
@@ -267,7 +270,7 @@ def run(cfg, out=None):
                     p.add_(c["expo"] * (p - q0))
         extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"],
                      max_lift=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95)),
-                     curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None,
+                     curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None, round_bins=round_bins,
                      train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"])
         if r in c.get("probe", []):
             from rsi.probe import probe
