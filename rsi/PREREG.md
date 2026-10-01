@@ -161,3 +161,5 @@ All on seeds 0–2 first; held-out seeds 3–7 if (a)–(c) hold.
 | P10a balanced ≥ argmax K = 64 in take-off | 0.010 vs 0.072 | fails |
 | P10b balanced ≈ argmax K = 2 in the easy regime | 0.912 vs 0.895 | holds |
 | P10c balanced ≈ argmax K = 2 in the hard regime (AUC) | see final line below | fails |
+
+P10c final (3 seeds): balanced AUC 0.595, final 0.697 vs argmax K = 2 AUC 0.630, final 0.753 -> fails.
