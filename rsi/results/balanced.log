@@ -1,0 +1,9 @@
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+{'rule': 'balanced', 'K': 64, 'demo_noise': 0.45, 'seed': 0} J_sys=0.89 J_gen=0.86 opt0=-0.01 curve=[0.42, 0.75, 0.91, 0.9, 0.92, 0.84, 0.89] (2091s)
+{'rule': 'balanced', 'K': 64, 'curriculum': True, 'her': True, 'demo_goals': 'table', 'train_h': [0.0, 0.3], 'eval_h': [0.1, 0.3], 'rounds': 10, 'seed': 1} J_sys=0.00 J_gen=0.00 opt0=+0.01 curve=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] (2868s)
+{'rule': 'balanced', 'K': 64, 'curriculum': True, 'her': True, 'demo_goals': 'table', 'train_h': [0.0, 0.3], 'eval_h': [0.1, 0.3], 'rounds': 10, 'seed': 2} J_sys=0.00 J_gen=0.00 opt0=+0.02 curve=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] (2880s)
+{'rule': 'balanced', 'K': 64, 'curriculum': True, 'her': True, 'demo_goals': 'table', 'train_h': [0.0, 0.3], 'eval_h': [0.1, 0.3], 'rounds': 10, 'seed': 0} J_sys=0.03 J_gen=0.00 opt0=-0.01 curve=[0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.01, 0.03] (2881s)
+{'rule': 'balanced', 'K': 64, 'demo_noise': 0.45, 'seed': 1} J_sys=0.93 J_gen=0.91 opt0=-0.01 curve=[0.41, 0.74, 0.83, 0.84, 0.94, 0.92, 0.93] (1183s)
+{'rule': 'balanced', 'K': 64, 'demo_noise': 0.9, 'seed': 0} J_sys=0.64 J_gen=0.61 opt0=+0.12 curve=[0.23, 0.55, 0.76, 0.72, 0.74, 0.68, 0.64] (976s)
+{'rule': 'balanced', 'K': 64, 'demo_noise': 0.45, 'seed': 2} J_sys=0.92 J_gen=0.93 opt0=-0.06 curve=[0.46, 0.83, 0.88, 0.91, 0.94, 0.95, 0.92] (990s)
+{'rule': 'balanced', 'K': 64, 'demo_noise': 0.9, 'seed': 1} J_sys=0.74 J_gen=0.70 opt0=-0.10 curve=[0.1, 0.42, 0.58, 0.69, 0.73, 0.74, 0.74] (977s)

@@ -36,6 +36,30 @@ on this testbed.
 Conclusion on Fetch: once the χ² step is small, the selection/distillation design space is saturated.
 Argmax K = 2 (optionally re-selected with the refit critic) matches every principled alternative we tried.
 
+## Third loop: take-off beyond the demonstrations (the user chose this problem)
+Testbed: demos with table goals only; target goals 0.10–0.30 m in the air, base success 0.00.
+- **The standard loop never takes off.** Argmax K = 2, with or without the frontier curriculum and
+  hindsight relabelling, stays at 0 for 10 rounds and sharpens back to table behaviour (lift 2.8 → 0.5 cm).
+- **Aggressive selection is what moves the frontier.** Argmax K = 64 + curriculum + HER takes off on 1 of 3
+  seeds (0.21 target success, 19 cm lift) and starts on a second. χ²-TR (small step) does not take off.
+- **Regime dependence.** The optimal χ² step is small inside the demonstration support (exploitation:
+  pessimism wins) and large outside it (exploration: optimism wins). This matches the LLM theory that
+  sharpening cannot exceed the base policy's coverage without exploration (Huang et al. 2024; XPO).
+- **The success-balanced rule fails to unify both regimes.** It picks K_eff with 1 − (1 − m)^K_eff = 1/2.
+  It matches argmax K = 2 in the easy regime, is slightly worse in the hard regime, and is too slow to take
+  off within 10 rounds (P10).
+
+## Overall verdict of the search
+- No algorithm found here beats the simplest tuned baseline in a pre-registered test.
+- What is robust and theory-backed:
+  - Lemmas 1–2 and the χ² step-size law;
+  - the K-inversion;
+  - the critic overstates the spread between candidates;
+  - the regime-dependent optimal step (small in-distribution, large for take-off).
+- These support an analysis paper, not yet an algorithm paper. The most promising algorithmic lead is
+  reliable take-off. It needs longer runs (20–30 rounds) and more seeds than 4 CPU cores allow, which the
+  RTX 5090 host (24 threads; Fetch is CPU-bound) can provide.
+
 ## Artifacts
 - `ppa/select.py` + tests: argmax, LCB, softmax, χ², χ²-trust-region selection
 - `docs/PA_THEORY.md`: Lemmas 1–3

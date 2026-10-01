@@ -151,3 +151,13 @@ bins, m is the previous round's training success. Nothing is tuned.
 - (c) hard regime: AUC ≥ argmax K = 2 − 0.02.
 
 All on seeds 0–2 first; held-out seeds 3–7 if (a)–(c) hold.
+
+## Verdicts for P9–P10 (tune seeds 0–2)
+| prediction | result | verdict |
+|---|---|---|
+| P9a curriculum + HER (argmax K = 2) takes off | 0.00 target success on 3/3 seeds; the lift shrinks | fails |
+| P9b χ²-TR K = 64 beats argmax K = 2 in take-off | both 0.00 | fails |
+| (exploratory) argmax K = 64 + curriculum + HER | seed 0: 0.21, seed 2: lift 6 cm, seed 1: none | 1/3 takes off |
+| P10a balanced ≥ argmax K = 64 in take-off | 0.010 vs 0.072 | fails |
+| P10b balanced ≈ argmax K = 2 in the easy regime | 0.912 vs 0.895 | holds |
+| P10c balanced ≈ argmax K = 2 in the hard regime (AUC) | 0.595 vs 0.630 (2 seeds) | fails |
