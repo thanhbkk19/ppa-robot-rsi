@@ -163,3 +163,19 @@ All on seeds 0–2 first; held-out seeds 3–7 if (a)–(c) hold.
 | P10c balanced ≈ argmax K = 2 in the hard regime (AUC) | see final line below | fails |
 
 P10c final (3 seeds): balanced AUC 0.595, final 0.697 vs argmax K = 2 AUC 0.630, final 0.753 -> fails.
+
+## Amendment F (written before any CFG-RSI run): self-improving CFG in the take-off regime
+Context: see `rsi/results/A1_REPORT.md`. The in-distribution regimes are explained by demo labels
+(filtered BC ≈ 0.93), so the CFG-RSI test runs in the take-off regime (table demos, target goals
+0.10–0.30 m, curriculum + HER, 10 rounds, seeds 0–2).
+
+Methods:
+- CFG-RSI (`rsi/cfg.py`), (w, v) ∈ {(0, 0), (1, 0), (2, 0), (3, 0), (2, 1)}.
+- Baselines from filtered-BC init: argmax K = 2 and argmax K = 64 (curriculum + HER).
+
+Predictions:
+- **P11a:** some CFG config with w ≥ 2 reaches target success ≥ 0.05 at round 10 on ≥ 2 of 3 seeds.
+- **P11b:** the best CFG config's mean final target success ≥ argmax K = 64 (filtered init).
+- Mechanism, reported whatever the outcome: lift per round increases with w (guidance extrapolates);
+  v > 0 keeps action diversity higher than v = 0 at the same w; the fraction of success labels and the
+  conditional-vs-unconditional gap show whether the model learns the outcome structure.

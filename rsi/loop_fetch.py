@@ -24,18 +24,20 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
     os.makedirs(CACHE, exist_ok=True)
-    tag = "" if c["demo_goals"] == "env" else f"_{c['demo_goals']}"
+    tag = ("" if c["demo_goals"] == "env" else f"_{c['demo_goals']}") + ("_filt" if c["demo_filter"] else "")
     f = os.path.join(CACHE, f"bc_n{c['n_demo']}_z{c['demo_noise']}{tag}_s{c['seed']}.pt")
     if os.path.exists(f):
         st = torch.load(f, weights_only=False)
         gen = Diffusion(OBS_DIM, ACT_DIM); gen.load_state_dict(st["gen"])
         return gen, st["S"], st["A"]
     S, A, Y = collect_demos(c["n_demo"], c["demo_noise"], seed=1000 + c["seed"], table_only=c["demo_goals"] == "table")
+    if c["demo_filter"]:   # filtered BC: keep only the successful demonstrations
+        S, A = S[Y > 0.5], A[Y > 0.5]
     S = S.reshape(-1, OBS_DIM); A = A.reshape(-1, ACT_DIM)
     torch.manual_seed(c["seed"])
     gen = Diffusion(OBS_DIM, ACT_DIM); gen.fit(S, A, c["bc_steps"], c["seed"])
