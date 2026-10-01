@@ -87,3 +87,13 @@ def test_lcb_opt_weights_limits_and_optimality():
             for _ in range(500):
                 w = rng.dirichlet(np.ones(16) * 0.3)
                 assert obj(w, q[i], c) <= best + 1e-6
+
+
+def test_balanced_delta():
+    from ppa.select import balanced_delta, chi2_trust_weights
+    d, k = balanced_delta(np.array([0.9, 0.5, 0.2, 0.05, 0.0]), 64)
+    assert np.allclose(k[:2], 2) and k[-1] == 64 and np.all(np.diff(k) >= 0)
+    assert np.isclose(1 - (1 - 0.2) ** k[2], 0.5)                       # best-of-K_eff succeeds half the time
+    q = np.random.default_rng(6).random((5, 64))
+    w = chi2_trust_weights(q, d)                                         # per-row deltas
+    assert np.allclose(chi2_divergence(w)[:4], d[:4], rtol=1e-3, atol=1e-3)

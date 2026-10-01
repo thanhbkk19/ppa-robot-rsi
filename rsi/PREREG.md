@@ -130,3 +130,24 @@ Runs (seeds 0–2, 10 rounds, train heights 0–0.3 m, evaluation on 0.10–0.30
 
 **P9a:** E3 takes off (mean final target success ≥ 0.10).
 **P9b:** E4 target AUC ≥ E3 + 0.05, and E4 > E5.
+
+## Amendment E (written after the take-off runs E1–E5 on seeds 0–2, before any `balanced` run)
+Take-off facts (10 rounds):
+- argmax K = 64 + curriculum + HER takes off on seed 0 (target success 0.21, object lift 19 cm) and starts
+  on seed 2 (lift 6 cm at round 10). Seed 1 does not take off.
+- Every small-step variant stays at 0 and sharpens back to table behaviour (the lift decreases): argmax K = 2
+  with or without curriculum or HER, and χ²-TR δ = 0.5 at K = 64.
+- In-distribution the opposite holds: argmax K = 2 is the best, and K = 64 over-optimises.
+
+**Unified rule (`balanced`).** For an episode whose task has current success estimate m (per goal-height
+bin, from past training rounds only), select by argmax over a random subset of K_eff(m) of the K = 64
+candidates, where 1 − (1 − m)^{K_eff} = 1/2, clipped to [2, 64]. This is the p(1 − p)-maximising point for
+the selected system. It reduces to argmax-of-2 where m ≥ 0.5 and to argmax-of-64 where m → 0. Without goal
+bins, m is the previous round's training success. Nothing is tuned.
+
+**P10:**
+- (a) take-off regime: final target success ≥ argmax K = 64 (same curriculum + HER);
+- (b) easy regime: final J ≥ argmax K = 2 − 0.02;
+- (c) hard regime: AUC ≥ argmax K = 2 − 0.02.
+
+All on seeds 0–2 first; held-out seeds 3–7 if (a)–(c) hold.

@@ -64,6 +64,14 @@ def select_fn(c, critic, rng):
         elif rule == "chi2":
             p = chi2_weights(qm, c["beta"])
             j = (p.cumsum(1) < rng.random((n, 1))).sum(1).clip(0, K - 1)
+        elif rule == "balanced":   # success-balanced step: argmax over a random subset of K_eff(m) candidates
+            from ppa.select import balanced_delta
+            m = sel.m_cur if sel.m_cur is not None else np.full(n, sel.m_global)
+            _, keff = balanced_delta(m, K)
+            ke = np.maximum(2, np.round(keff)).astype(int)
+            score = np.where(rng.random((n, K)).argsort(1) < ke[:, None], qm, -np.inf)   # keep ke random candidates
+            j = score.argmax(1)
+            sel.chi2.append(float(((ke - 1) ** 2 / (2 * ke - 1)).mean()))
         elif rule == "lcbopt":     # maximise the certified lower bound w.q - z eps(s) ||w||, eps(s) = ensemble sd
             from ppa.select import lcb_opt_weights
             p = lcb_opt_weights(qm, c["z"] * q.std(0).mean(1))
@@ -77,6 +85,7 @@ def select_fn(c, critic, rng):
             raise ValueError(rule)
         return j, q
     sel.chi2 = []
+    sel.m_cur, sel.m_global, sel.m_of_h = None, 0.5, None
     return sel
 
 
@@ -115,6 +124,8 @@ def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None, heig
     hs = heights_for(seeds, h_range) if heights is None else np.asarray(heights)
     for b in range(0, len(seeds), envs.n):
         o = envs.reset(seeds[b:b + envs.n], None if hs is None else hs[b:b + envs.n])
+        if getattr(sel, "m_of_h", None) is not None and hs is not None:
+            sel.m_cur = sel.m_of_h(hs[b:b + envs.n])
         S_ep, A_ep, C_ep = [], [], []
         for t in range(NDEC):
             S = np.c_[o, np.full(envs.n, t / NDEC)].astype(np.float32)
@@ -152,11 +163,14 @@ def run(cfg, out=None):
     t0 = time.time()
 
     def evaluate(rnd, extra):
-        S, A, Y, d = episodes(gen, envs, eval_seeds, c["K"], select_fn(c, critic, rng), rng, h_range=c["eval_h"])
+        S, A, Y, d = episodes(gen, envs, eval_seeds, c["K"], prime(select_fn(c, critic, rng)), rng, h_range=c["eval_h"])
         opt0 = float("nan")
         if critic.trained:
             opt0 = float(critic(np.c_[S[:, 0], A[:, 0]]).mean() - Y.mean())
         _, _, Yg, _ = episodes(gen, envs, eval_seeds, 1, select_fn(c, critic, rng), rng, h_range=c["eval_h"])
+        d = {k: v for k, v in d.items() if not isinstance(v, np.ndarray)}
+        if c["eval_h"] is not None:   # where the evaluation objects end up (lift above the table, 95th pct)
+            extra = dict(extra)
         hist.append(dict(round=rnd, J_sys=float(Y.mean()), J_gen=float(Yg.mean()), opt0=opt0,
                          wall=time.time() - t0, **d, **extra))
         if out:
@@ -168,6 +182,17 @@ def run(cfg, out=None):
     edges = None if c["train_h"] is None else np.linspace(c["train_h"][0], c["train_h"][1], nb + 1)
     succ_n, tot_n = np.ones(nb), np.full(nb, 2.0)
 
+    m_last = [0.5]
+
+    def m_of_h(h):
+        b = np.clip(np.searchsorted(edges, h, side="right") - 1, 0, nb - 1)
+        return succ_n[b] / tot_n[b]
+
+    def prime(sel):   # give the selection rule predictable success estimates (past training rounds only)
+        sel.m_global = m_last[0]
+        sel.m_of_h = m_of_h if edges is not None else None
+        return sel
+
     def curriculum_heights(n):
         m = succ_n / tot_n
         p = m * (1 - m) + 0.02
@@ -177,13 +202,14 @@ def run(cfg, out=None):
     evaluate(0, {})
     for r in range(1, c["rounds"] + 1):
         seeds = [100_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_train"])]
-        sel = select_fn(c, critic, rng)
+        sel = prime(select_fn(c, critic, rng))
         hts = curriculum_heights(len(seeds)) if c["curriculum"] else None
         S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"], h_range=c["train_h"],
                               heights=hts)
-        if c["curriculum"]:
+        if edges is not None and "heights" in d:
             bi = np.clip(np.searchsorted(edges, d["heights"], side="right") - 1, 0, nb - 1)
             np.add.at(succ_n, bi, Y); np.add.at(tot_n, bi, 1.0)
+        m_last[0] = float(Y.mean())
         if c["her"]:
             # hindsight (final-state) relabelling: the achieved object position becomes the goal, and the episode
             # is a success for it. Appended to the critic replay and to the distillation data (GCSL-style).

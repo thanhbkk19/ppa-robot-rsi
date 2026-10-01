@@ -54,6 +54,8 @@ def chi2_trust_weights(q, delta, iters=40):
     T = _is_torch(q)
     xp_log = (lambda x: torch.log(torch.as_tensor(x, dtype=q.dtype, device=q.device))) if T else np.log
     n, K = q.shape
+    if not T and np.ndim(delta) > 0:          # per-row trust region (NumPy): delta [B]
+        delta = np.asarray(delta, float).reshape(n, 1)
     lo = xp_log(1e-6) * (torch.ones(n, 1, dtype=q.dtype, device=q.device) if T else np.ones((n, 1)))
     hi = xp_log(1e3) * (torch.ones(n, 1, dtype=q.dtype, device=q.device) if T else np.ones((n, 1)))
     exp = torch.exp if T else np.exp
@@ -111,6 +113,17 @@ def lcb_opt_weights(q, c, iters=50):
     s_ = w.sum(1, keepdims=True)
     w = np.where(s_ > 0, w / np.where(s_ > 0, s_, 1), np.eye(K)[q.argmax(1)])
     return w
+
+
+def balanced_delta(m, K):
+    """Success-balanced step size. For a task whose current success is m, pick the effective number of
+    candidates K_eff that would make best-of-K_eff succeed half of the time, 1 - (1 - m)^K_eff = 1/2
+    (the p(1-p)-maximising point, applied to the selected system), clipped to [2, K]. Return the chi^2 step of
+    argmax-of-K_eff, (K_eff - 1)^2 / (2 K_eff - 1) (docs/PA_THEORY.md Lemma 2); at K_eff = K, use argmax.
+    m in [0, 1], array or scalar."""
+    m = np.clip(np.asarray(m, float), 1e-6, 1 - 1e-6)
+    k = np.clip(np.log(0.5) / np.log(1 - m), 2, K)
+    return (k - 1) ** 2 / (2 * k - 1), k
 
 
 def selection_probs(q_ens, rule="argmax", beta=0.05, temp=0.03, kappa=1.0, delta=1.0):
