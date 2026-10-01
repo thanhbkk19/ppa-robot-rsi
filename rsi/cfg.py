@@ -194,6 +194,8 @@ def run(cfg, out=None):
         Cc = np.concatenate(RC)
         evaluate(r, dict(train_J=float(Y.mean()), fit_loss=loss, frac_succ_labels=float(Cc[:, 0].mean()),
                          train_lift_p95=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95))))
+    if out:   # final model, for mechanism analysis (not committed: *.pt is git-ignored)
+        torch.save(gen.state_dict(), out[:-5] + ".pt")
     return dict(cfg=c, hist=hist)
 
 

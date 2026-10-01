@@ -268,6 +268,8 @@ def run(cfg, out=None):
             from rsi.probe import probe
             extra["probe"] = probe(gen, critic, select_fn(c, critic, rng), c["K"], c["seed"] * 100 + r, rng=rng)
         evaluate(r, extra)
+    if out:   # final generator + critic, for mechanism analysis (git-ignored)
+        torch.save(dict(gen=gen.state_dict(), critic=[n.state_dict() for n in critic.nets]), out[:-5] + ".pt")
     return dict(cfg=c, hist=hist)
 
 
