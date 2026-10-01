@@ -24,7 +24,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", train_h=None, eval_h=None, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -108,11 +108,11 @@ def heights_for(seeds, rng_h):
     return np.array([lo + (hi - lo) * ((s * 0.6180339887498949) % 1.0) for s in seeds])
 
 
-def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None):
+def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None, heights=None):
     """Run len(seeds) episodes (batches of envs.n). Returns S (n, NDEC, s), A (n, NDEC, a), Y (n,), diag.
     keep_cands: diag["C"] holds every candidate set (n, NDEC, K, a) for Rao-Blackwellised distillation."""
-    S_all, A_all, Y_all, spread, ens_sd, C_all = [], [], [], [], [], []
-    hs = heights_for(seeds, h_range)
+    S_all, A_all, Y_all, spread, ens_sd, C_all, F_all = [], [], [], [], [], [], []
+    hs = heights_for(seeds, h_range) if heights is None else np.asarray(heights)
     for b in range(0, len(seeds), envs.n):
         o = envs.reset(seeds[b:b + envs.n], None if hs is None else hs[b:b + envs.n])
         S_ep, A_ep, C_ep = [], [], []
@@ -128,12 +128,16 @@ def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None):
             if keep_cands:
                 C_ep.append(C.astype(np.float16))
         S_all.append(np.stack(S_ep, 1)); A_all.append(np.stack(A_ep, 1)); Y_all.append(succ)
+        F_all.append(o[:, 3:6].copy())           # final object position (achieved goal)
         if keep_cands:
             C_all.append(np.stack(C_ep, 1))
     d = dict(q_spread=float(np.mean(spread)) if spread else float("nan"),
              q_ens_sd=float(np.mean(ens_sd)) if ens_sd else float("nan"))
     if keep_cands:
         d["C"] = np.concatenate(C_all)
+    d["final_obj"] = np.concatenate(F_all)
+    if hs is not None:
+        d["heights"] = np.asarray(hs, float)
     return np.concatenate(S_all), np.concatenate(A_all), np.concatenate(Y_all), d
 
 
@@ -158,11 +162,38 @@ def run(cfg, out=None):
         if out:
             json.dump(dict(cfg=c, hist=hist), open(out, "w"))
 
+    # frontier curriculum over goal heights: bins of 2.5 cm in train_h, success counts with a Beta(1, 1) prior,
+    # training heights drawn per bin with probability proportional to m (1 - m) + floor (SEC / PLR-style)
+    nb = 12
+    edges = None if c["train_h"] is None else np.linspace(c["train_h"][0], c["train_h"][1], nb + 1)
+    succ_n, tot_n = np.ones(nb), np.full(nb, 2.0)
+
+    def curriculum_heights(n):
+        m = succ_n / tot_n
+        p = m * (1 - m) + 0.02
+        b = rng.choice(nb, size=n, p=p / p.sum())
+        return edges[b] + rng.random(n) * (edges[b + 1] - edges[b])
+
     evaluate(0, {})
     for r in range(1, c["rounds"] + 1):
         seeds = [100_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_train"])]
         sel = select_fn(c, critic, rng)
-        S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"], h_range=c["train_h"])
+        hts = curriculum_heights(len(seeds)) if c["curriculum"] else None
+        S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"], h_range=c["train_h"],
+                              heights=hts)
+        if c["curriculum"]:
+            bi = np.clip(np.searchsorted(edges, d["heights"], side="right") - 1, 0, nb - 1)
+            np.add.at(succ_n, bi, Y); np.add.at(tot_n, bi, 1.0)
+        if c["her"]:
+            # hindsight (final-state) relabelling: the achieved object position becomes the goal, and the episode
+            # is a success for it. Appended to the critic replay and to the distillation data (GCSL-style).
+            S_h = S.copy(); S_h[:, :, 25:28] = d["final_obj"][:, None, :]
+            X3h = np.concatenate([S_h, A], -1)
+            RX.append(X3h.reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.ones(len(Y) * NDEC))
+            RXn.append(np.concatenate([X3h[:, 1:], X3h[:, -1:]], 1).reshape(-1, OBS_DIM + ACT_DIM))
+            RL.append(np.tile(np.arange(NDEC) == NDEC - 1, len(Y)))
+            if c["boot"]:
+                RW.append(np.repeat(rng.poisson(1.0, (len(Y), c["n_ens"])), NDEC, 0))
         d["sel_chi2"] = float(np.mean(sel.chi2)) if sel.chi2 else float("nan")
         X3 = np.concatenate([S, A], -1)                                   # (n, NDEC, s + a)
         RX.append(X3.reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.repeat(Y, NDEC))
@@ -192,6 +223,8 @@ def run(cfg, out=None):
             DS.append(np.repeat(Ss, c["rb_draws"], 0)); DA.append(A_rb)
         else:
             DS.append(S.reshape(-1, OBS_DIM)); DA.append(A.reshape(-1, ACT_DIM))
+        if c["her"]:
+            DS[-1] = np.concatenate([DS[-1], S_h.reshape(-1, OBS_DIM)]); DA[-1] = np.concatenate([DA[-1], A.reshape(-1, ACT_DIM)])
         if c["distill_data"] == "round":
             Sx, Ax = DS[-1], DA[-1]
         else:  # accumulate every round's executed chunks
@@ -200,6 +233,8 @@ def run(cfg, out=None):
         gen.fit(np.concatenate([Sx, Sd[i]]), np.concatenate([Ax, Ad[i]]), c["distill_steps"],
                 c["seed"] * 100 + r, lr=c["distill_lr"])
         extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"],
+                     max_lift=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95)),
+                     curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None,
                      train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"])
         if r in c.get("probe", []):
             from rsi.probe import probe

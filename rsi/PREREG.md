@@ -107,3 +107,26 @@ hard regime, and ≥ the same baseline − 0.01 in the easy regime.
 
 RB re-selection helps every rule a little (argmax K = 2: +0.017 easy, +0.033 hard). That is an
 engineering gain, not a new algorithm.
+
+## Amendment D (written before any take-off method run): take-off beyond the demonstrations
+Testbed: demos with table goals only (`demo_goals="table"`, demo noise 0.45). Target = goals 0.10–0.30 m in
+the air, where the base success is 0.00 on all 3 seeds. Diagnosis (`rsi/results/takeoff_diag`): argmax K = 2
+for 10 rounds stays at 0.00 target success, whether it trains on target goals or on all heights 0–0.3 m.
+
+Infrastructure (standard methods, used as factors):
+- frontier curriculum over goal height: p ∝ m(1 − m) + 0.02 per 2.5 cm bin (SEC / PLR);
+- hindsight final-state relabelling for the critic and the distillation data (HER / GCSL).
+
+Hypothesis linking the earlier findings: beyond the demonstrations, coverage is the bottleneck. Best-of-K
+gain (1 − (1 − m)^K) − m peaks at m* = 1 − K^{−1/(K−1)} (0.50 for K = 2, 0.06 for K = 64). Large K is
+therefore needed, and it is usable only with a small χ² step (χ²-TR), because argmax-of-64 over-optimises.
+
+Runs (seeds 0–2, 10 rounds, train heights 0–0.3 m, evaluation on 0.10–0.30 m):
+- E1 argmax K = 2 + curriculum
+- E2 argmax K = 2 + HER
+- E3 argmax K = 2 + curriculum + HER
+- E4 χ²-TR δ = 0.5, K = 64 + curriculum + HER
+- E5 argmax K = 64 + curriculum + HER
+
+**P9a:** E3 takes off (mean final target success ≥ 0.10).
+**P9b:** E4 target AUC ≥ E3 + 0.05, and E4 > E5.
