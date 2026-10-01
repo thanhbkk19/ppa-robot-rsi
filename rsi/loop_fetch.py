@@ -24,7 +24,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -63,6 +63,11 @@ def select_fn(c, critic, rng):
         elif rule == "chi2":
             p = chi2_weights(qm, c["beta"])
             j = (p.cumsum(1) < rng.random((n, 1))).sum(1).clip(0, K - 1)
+        elif rule == "lcbopt":     # maximise the certified lower bound w.q - z eps(s) ||w||, eps(s) = ensemble sd
+            from ppa.select import lcb_opt_weights
+            p = lcb_opt_weights(qm, c["z"] * q.std(0).mean(1))
+            sel.chi2.append(float((K * (p ** 2).sum(1) - 1).mean()))
+            j = (p.cumsum(1) < rng.random((n, 1))).sum(1).clip(0, K - 1)
         elif rule == "chi2tr":
             from ppa.select import chi2_trust_weights
             p = chi2_trust_weights(qm, c["delta"])
@@ -70,6 +75,7 @@ def select_fn(c, critic, rng):
         else:
             raise ValueError(rule)
         return j, q
+    sel.chi2 = []
     return sel
 
 
@@ -101,7 +107,7 @@ def run(cfg, out=None):
     critic = Critic(OBS_DIM, ACT_DIM, c["n_ens"], c["critic_lr"], seed=c["seed"])
     envs = Envs(c["n_envs"])
     eval_seeds = [900_000 + c["seed"] * 10_000 + i for i in range(c["n_eval"])]
-    RX, RY, hist, DS, DA = [], [], [], [], []
+    RX, RY, hist, DS, DA, RXn, RL, RW = [], [], [], [], [], [], [], []
     t0 = time.time()
 
     def evaluate(rnd, extra):
@@ -118,9 +124,21 @@ def run(cfg, out=None):
     evaluate(0, {})
     for r in range(1, c["rounds"] + 1):
         seeds = [100_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_train"])]
-        S, A, Y, d = episodes(gen, envs, seeds, c["K"], select_fn(c, critic, rng), rng)
-        RX.append(np.concatenate([S, A], -1).reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.repeat(Y, NDEC))
-        closs = critic.fit(np.concatenate(RX), np.concatenate(RY), c["critic_steps"])
+        sel = select_fn(c, critic, rng)
+        S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng)
+        d["sel_chi2"] = float(np.mean(sel.chi2)) if sel.chi2 else float("nan")
+        X3 = np.concatenate([S, A], -1)                                   # (n, NDEC, s + a)
+        RX.append(X3.reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.repeat(Y, NDEC))
+        if c["boot"]:   # per-episode bootstrap weights (drawn only here, so other runs keep their random stream)
+            RW.append(np.repeat(rng.poisson(1.0, (len(Y), c["n_ens"])), NDEC, 0))
+        RXn.append(np.concatenate([X3[:, 1:], X3[:, -1:]], 1).reshape(-1, OBS_DIM + ACT_DIM))
+        RL.append(np.tile(np.arange(NDEC) == NDEC - 1, len(Y)))
+        if c["critic_target"] == "mc":
+            closs = critic.fit(np.concatenate(RX), np.concatenate(RY), c["critic_steps"],
+                               wboot=np.concatenate(RW) if c["boot"] else None)
+        else:
+            closs = critic.fit_sarsa(np.concatenate(RX), np.concatenate(RXn), np.concatenate(RL),
+                                     np.concatenate(RY), c["critic_steps"])
         DS.append(S.reshape(-1, OBS_DIM)); DA.append(A.reshape(-1, ACT_DIM))
         if c["distill_data"] == "round":
             Sx, Ax = DS[-1], DA[-1]
@@ -129,7 +147,8 @@ def run(cfg, out=None):
         nm = int(c["rho"] * len(Sx)); i = rng.integers(0, len(Sd), nm)
         gen.fit(np.concatenate([Sx, Sd[i]]), np.concatenate([Ax, Ad[i]]), c["distill_steps"],
                 c["seed"] * 100 + r, lr=c["distill_lr"])
-        extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"])
+        extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"],
+                     train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"])
         if r in c.get("probe", []):
             from rsi.probe import probe
             extra["probe"] = probe(gen, critic, select_fn(c, critic, rng), c["K"], c["seed"] * 100 + r, rng=rng)

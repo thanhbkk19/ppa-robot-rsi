@@ -73,13 +73,42 @@ class Critic:
         self.g = torch.Generator().manual_seed(seed + 1)
         self.trained = False
 
-    def fit(self, X, y, steps=2000, batch=512):
+    def fit(self, X, y, steps=2000, batch=512, wboot=None):
+        """wboot [N, n_ens]: per-row bootstrap weights (Poisson(1) per episode) -> each member is fit on its own
+        bootstrap resample, so ensemble disagreement estimates the critic's statistical error."""
         X = torch.as_tensor(X, dtype=torch.float32); y = torch.as_tensor(y, dtype=torch.float32)
-        for net, opt in zip(self.nets, self.opts):
+        W = None if wboot is None else torch.as_tensor(wboot, dtype=torch.float32)
+        for m, (net, opt) in enumerate(zip(self.nets, self.opts)):
             for _ in range(steps):
-                i = torch.randint(0, len(X), (batch,), generator=self.g)
+                if W is None:
+                    i = torch.randint(0, len(X), (batch,), generator=self.g)
+                else:
+                    i = torch.multinomial(W[:, m], batch, replacement=True, generator=self.g)
                 loss = ((net(X[i]).squeeze(-1) - y[i]) ** 2).mean()
                 opt.zero_grad(); loss.backward(); opt.step()
+        self.trained = True
+        return loss.item()
+
+    def fit_sarsa(self, X, Xn, last, y, steps=2000, batch=512, tau=0.005):
+        """SARSA targets on executed chunks: y_t = Q_targ(s_{t+1}, a_{t+1}) for t < T-1, y_{T-1} = success.
+        Lower-variance than MC (future randomness is replaced by its estimate), biased by bootstrapping."""
+        import copy
+        X = torch.as_tensor(X, dtype=torch.float32); Xn = torch.as_tensor(Xn, dtype=torch.float32)
+        last = torch.as_tensor(last, dtype=torch.bool); y = torch.as_tensor(y, dtype=torch.float32)
+        if not hasattr(self, "targs"):
+            self.targs = [copy.deepcopy(n) for n in self.nets]
+        for _ in range(steps):
+            i = torch.randint(0, len(X), (batch,), generator=self.g)
+            with torch.no_grad():
+                qn = torch.stack([t(Xn[i]).squeeze(-1) for t in self.targs]).mean(0)
+                tgt = torch.where(last[i], y[i], qn)
+            for net, opt in zip(self.nets, self.opts):
+                loss = ((net(X[i]).squeeze(-1) - tgt) ** 2).mean()
+                opt.zero_grad(); loss.backward(); opt.step()
+            with torch.no_grad():
+                for net, t in zip(self.nets, self.targs):
+                    for p, pt in zip(net.parameters(), t.parameters()):
+                        pt.lerp_(p, tau)
         self.trained = True
         return loss.item()
 

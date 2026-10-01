@@ -51,3 +51,23 @@ only when coverage is the bottleneck, i.e. good chunks are rare under μ.
 argmax at its best K ∈ {2, 4, 16, 64} + 0.05.
 - If P6 fails: soft large-K selection has no advantage over small-K argmax on Fetch. The contribution then
   reduces to the K-inversion diagnosis plus "match the step size", and we go back to Phase 2.
+
+## Amendment B (written before any lcbopt run): per-state certified-bound selection
+Diagnosis from the ground-truth probe (`rsi/results/probe_fetch`, argmax K = 4, round 1, decision 4):
+- Candidates are nearly equivalent in true value: spread 0.05, at the Monte-Carlo noise level 0.08.
+- The critic predicts more spread than exists (0.086); Spearman correlation with the true values is 0.34.
+- The gain over a random pick is −0.006, i.e. none.
+- So selection matters only at a few states, and a fixed step selects on noise everywhere else.
+
+Method (`ppa/select.py:lcb_opt_weights`, rule `lcbopt`): at each state, maximise Lemma 1's certified lower
+bound w·q̄ − z·ε(s)·‖w‖₂ over the simplex.
+- ε(s) is the mean disagreement of a 5-member bootstrap ensemble (members are fit on Poisson(1)-resampled
+  episodes).
+- The solution is w ∝ (q̄ − λ)₊ with ‖(q̄ − λ)₊‖₂ = z·ε(s). It is argmax where one candidate beats the rest by
+  more than the noise, and near-uniform where the candidates are within the noise.
+
+Tuning (seeds 0–2, easy regime, K = 64): z ∈ {0.5, 1, 2}. Baselines use the same 5-member bootstrap critic:
+argmax at K ∈ {2, 4} (its own tuning budget).
+
+**P7:** on held-out seeds 3–7, in both the easy and the hard regime, AUC of lcbopt (best z, K = 64) ≥ AUC of
+argmax (same critic, best K ∈ {2, 4}) + 0.03, with the paired 95% interval above 0 in at least one regime.

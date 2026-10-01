@@ -70,3 +70,20 @@ def test_chi2_trust_region_binds_and_is_scale_free():
         assert np.allclose(chi2_trust_weights(torch.tensor(q), delta).numpy(), w, atol=1e-5)
     w = chi2_trust_weights(q[:, :4], 10.0)                    # delta >= K - 1: argmax
     assert (w.argmax(1) == q[:, :4].argmax(1)).all() and np.allclose(w.max(1), 1, atol=1e-4)
+
+
+def test_lcb_opt_weights_limits_and_optimality():
+    from ppa.select import lcb_opt_weights
+    rng = np.random.default_rng(5)
+    q = rng.random((40, 16)) * 0.3
+    assert (lcb_opt_weights(q, 1e-9).argmax(1) == q.argmax(1)).all()          # c -> 0: argmax
+    assert np.allclose(lcb_opt_weights(q, 1e3), 1 / 16, atol=1e-3)            # c -> inf: uniform
+    obj = lambda w, qq, c: (w * qq).sum() - c * np.sqrt((w ** 2).sum())
+    for c in [0.02, 0.1, 0.4]:
+        W = lcb_opt_weights(q, c)
+        assert np.allclose(W.sum(1), 1)
+        for i in range(3):
+            best = obj(W[i], q[i], c)
+            for _ in range(500):
+                w = rng.dirichlet(np.ones(16) * 0.3)
+                assert obj(w, q[i], c) <= best + 1e-6

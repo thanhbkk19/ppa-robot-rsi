@@ -23,6 +23,7 @@ def probe(gen, critic, sel, K, seed, n_states=16, t_probe=4, Kc=8, R=16, rng=Non
         j = np.zeros(n_states, int) if K == 1 else sel(S, C)[0]
         o, _ = base.step_chunk(C[np.arange(n_states), j], H)
     sims = Envs(Kc * R)
+    sims.reset(list(range(sims.n)))     # gymnasium requires a reset before the first step; states are overwritten
     out = []
     for i in range(n_states):
         st = base.get_state(i)

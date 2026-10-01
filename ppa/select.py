@@ -89,6 +89,27 @@ def _chi2_rowbeta(q, beta):
     return w / w.sum(1, keepdims=True)
 
 
+def lcb_opt_weights(q, c, iters=50):
+    """Per-row maximiser of the certified lower bound  w.q - c ||w||_2  over the simplex (docs/PA_THEORY.md
+    Lemma 1 with error scale c = z * eps(s)). KKT: w is proportional to (q - lam)_+ with ||(q - lam)_+||_2 = c.
+    If the top gap exceeds c the solution is argmax; as c grows it flattens to uniform (no selection).
+    q [B, K]; c [B] or scalar (>= 0). NumPy only (the Fetch testbed); see chi2_weights for a torch version."""
+    q = np.asarray(q, float)
+    n, K = q.shape
+    c = np.broadcast_to(np.asarray(c, float), (n,))[:, None]
+    hi = q.max(1, keepdims=True)                              # ||(q - hi)_+|| = 0 <= c
+    lo = q.min(1, keepdims=True) - c - 1e-12                  # ||(q - lo)_+|| >= sqrt(K) c >= c
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        f = np.sqrt((np.maximum(q - mid, 0) ** 2).sum(1, keepdims=True))
+        big = f > c
+        lo = np.where(big, mid, lo); hi = np.where(big, hi, mid)
+    w = np.maximum(q - hi, 0)
+    s = w.sum(1, keepdims=True)
+    w = np.where(s > 0, w / np.where(s > 0, s, 1), np.eye(K)[q.argmax(1)])
+    return w
+
+
 def selection_probs(q_ens, rule="argmax", beta=0.05, temp=0.03, kappa=1.0, delta=1.0):
     """q_ens [E, B, K] ensemble scores -> probabilities [B, K] over candidates (one-hot for argmax / lcb)."""
     T = _is_torch(q_ens)
