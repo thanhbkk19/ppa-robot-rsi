@@ -160,4 +160,4 @@ All on seeds 0–2 first; held-out seeds 3–7 if (a)–(c) hold.
 | (exploratory) argmax K = 64 + curriculum + HER | seed 0: 0.21, seed 2: lift 6 cm, seed 1: none | 1/3 takes off |
 | P10a balanced ≥ argmax K = 64 in take-off | 0.010 vs 0.072 | fails |
 | P10b balanced ≈ argmax K = 2 in the easy regime | 0.912 vs 0.895 | holds |
-| P10c balanced ≈ argmax K = 2 in the hard regime (AUC) | 0.595 vs 0.630 (2 seeds) | fails |
+| P10c balanced ≈ argmax K = 2 in the hard regime (AUC) | see final line below | fails |

@@ -7,3 +7,4 @@ AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 env
 {'rule': 'balanced', 'K': 64, 'demo_noise': 0.9, 'seed': 0} J_sys=0.64 J_gen=0.61 opt0=+0.12 curve=[0.23, 0.55, 0.76, 0.72, 0.74, 0.68, 0.64] (976s)
 {'rule': 'balanced', 'K': 64, 'demo_noise': 0.45, 'seed': 2} J_sys=0.92 J_gen=0.93 opt0=-0.06 curve=[0.46, 0.83, 0.88, 0.91, 0.94, 0.95, 0.92] (990s)
 {'rule': 'balanced', 'K': 64, 'demo_noise': 0.9, 'seed': 1} J_sys=0.74 J_gen=0.70 opt0=-0.10 curve=[0.1, 0.42, 0.58, 0.69, 0.73, 0.74, 0.74] (977s)
+{'rule': 'balanced', 'K': 64, 'demo_noise': 0.9, 'seed': 2} J_sys=0.71 J_gen=0.60 opt0=-0.04 curve=[0.23, 0.58, 0.62, 0.67, 0.68, 0.68, 0.71] (1001s)
