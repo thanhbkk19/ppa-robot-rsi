@@ -76,3 +76,22 @@ argmax (same critic, best K ∈ {2, 4}) + 0.03, with the paired 95% interval abo
   argmax (selection χ² 8–30). Those runs are kept under `rsi/results/invalid_lcbopt_missing_sqrtK`.
   The corrected solution: w ∝ (q̄ − λ)₊ with sd_k((q̄ − λ)₊) = z·ε(s), and uniform weights when
   sd_k(q̄) ≤ z·ε(s). The tuning grid is unchanged: z ∈ {0.5, 1, 2}.
+
+## Amendment C (written before any RB run): Rao–Blackwellised distillation
+Measured bottleneck of the best baseline (argmax K = 2): the generator does not absorb the system's
+improvement. In the hard regime, J_gen at round r+1 is 0.08–0.10 below J_sys at round r, and J_gen plateaus
+near 0.7.
+
+Method (`rb=True`):
+- After the critic refit, re-weight **all K candidates** of every visited state with the selection rule
+  under the new critic.
+- Distil 4 candidates per state drawn from those weights, stratified by state.
+- The target distribution is the same as distilling the executed action. By Rao–Blackwell the variance is
+  lower by up to K_eff, and only soft rules over many candidates benefit.
+
+The distillation compute is unchanged (same steps and batch). Control: argmax K = 2 with `rb=True`
+(re-selection with the new critic; there is no variance reduction for one-hot weights).
+
+**P8:** on tune seeds 0–2, then held-out seeds 3–7, AUC of the best RB soft rule at K = 64 (χ² β = 0.05 or
+χ²-TR δ = 0.5, chosen on seeds 0–2) ≥ AUC of the better of {argmax K = 2, argmax K = 2 + rb} + 0.03 in the
+hard regime, and ≥ the same baseline − 0.01 in the easy regime.

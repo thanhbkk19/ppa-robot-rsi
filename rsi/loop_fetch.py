@@ -24,7 +24,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -79,12 +79,33 @@ def select_fn(c, critic, rng):
     return sel
 
 
-def episodes(gen, envs, seeds, K, sel, rng):
-    """Run len(seeds) episodes (batches of envs.n). Returns S (n, NDEC, s), A (n, NDEC, a), Y (n,), diag."""
-    S_all, A_all, Y_all, spread, ens_sd = [], [], [], [], []
+def select_weights(c, critic, S, C):
+    """Selection probabilities [n, K] of rule c["rule"] for candidates C [n, K, a] at states S [n, s]."""
+    from ppa.select import chi2_trust_weights, lcb_opt_weights
+    K = C.shape[1]
+    q = critic(np.concatenate([np.repeat(S[:, None], K, 1), C], -1))
+    qm = q.mean(0)
+    rule = c["rule"]
+    if rule == "argmax":
+        return np.eye(K)[qm.argmax(1)]
+    if rule == "chi2":
+        return chi2_weights(qm, c["beta"])
+    if rule == "chi2tr":
+        return chi2_trust_weights(qm, c["delta"])
+    if rule == "softmax":
+        z = qm / c["temp"]; p = np.exp(z - z.max(1, keepdims=True)); return p / p.sum(1, keepdims=True)
+    if rule == "lcbopt":
+        return lcb_opt_weights(qm, c["z"] * q.std(0).mean(1))
+    raise ValueError(rule)
+
+
+def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False):
+    """Run len(seeds) episodes (batches of envs.n). Returns S (n, NDEC, s), A (n, NDEC, a), Y (n,), diag.
+    keep_cands: diag["C"] holds every candidate set (n, NDEC, K, a) for Rao-Blackwellised distillation."""
+    S_all, A_all, Y_all, spread, ens_sd, C_all = [], [], [], [], [], []
     for b in range(0, len(seeds), envs.n):
         o = envs.reset(seeds[b:b + envs.n])
-        S_ep, A_ep = [], []
+        S_ep, A_ep, C_ep = [], [], []
         for t in range(NDEC):
             S = np.c_[o, np.full(envs.n, t / NDEC)].astype(np.float32)
             C = gen.sample(np.repeat(S, K, 0), rng.integers(1 << 30)).reshape(envs.n, K, ACT_DIM)
@@ -94,9 +115,15 @@ def episodes(gen, envs, seeds, K, sel, rng):
             a = C[np.arange(envs.n), j]
             o, succ = envs.step_chunk(a, min(H, STEPS - t * H))
             S_ep.append(S); A_ep.append(a)
+            if keep_cands:
+                C_ep.append(C.astype(np.float16))
         S_all.append(np.stack(S_ep, 1)); A_all.append(np.stack(A_ep, 1)); Y_all.append(succ)
+        if keep_cands:
+            C_all.append(np.stack(C_ep, 1))
     d = dict(q_spread=float(np.mean(spread)) if spread else float("nan"),
              q_ens_sd=float(np.mean(ens_sd)) if ens_sd else float("nan"))
+    if keep_cands:
+        d["C"] = np.concatenate(C_all)
     return np.concatenate(S_all), np.concatenate(A_all), np.concatenate(Y_all), d
 
 
@@ -125,7 +152,7 @@ def run(cfg, out=None):
     for r in range(1, c["rounds"] + 1):
         seeds = [100_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_train"])]
         sel = select_fn(c, critic, rng)
-        S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng)
+        S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"])
         d["sel_chi2"] = float(np.mean(sel.chi2)) if sel.chi2 else float("nan")
         X3 = np.concatenate([S, A], -1)                                   # (n, NDEC, s + a)
         RX.append(X3.reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.repeat(Y, NDEC))
@@ -139,7 +166,22 @@ def run(cfg, out=None):
         else:
             closs = critic.fit_sarsa(np.concatenate(RX), np.concatenate(RXn), np.concatenate(RL),
                                      np.concatenate(RY), c["critic_steps"])
-        DS.append(S.reshape(-1, OBS_DIM)); DA.append(A.reshape(-1, ACT_DIM))
+        if c["rb"]:
+            # Rao-Blackwellised distillation: re-weight ALL K candidates of every visited state with the selection
+            # rule under the freshly refit critic, then draw rb_draws candidates per state from those weights
+            # (stratified). Same target distribution as distilling the selected action, lower variance.
+            Cs = d.pop("C").reshape(-1, c["K"], ACT_DIM).astype(np.float32)
+            Ss = S.reshape(-1, OBS_DIM)
+            Wt = []
+            for b in range(0, len(Ss), 512):
+                Wt.append(select_weights(c, critic, Ss[b:b + 512], Cs[b:b + 512]))
+            Wt = np.concatenate(Wt)
+            u = rng.random((len(Ss), c["rb_draws"], 1))
+            idx = (Wt.cumsum(1)[:, None, :] < u).sum(-1).clip(0, c["K"] - 1)        # (n, draws)
+            A_rb = Cs[np.arange(len(Ss))[:, None], idx].reshape(-1, ACT_DIM)
+            DS.append(np.repeat(Ss, c["rb_draws"], 0)); DA.append(A_rb)
+        else:
+            DS.append(S.reshape(-1, OBS_DIM)); DA.append(A.reshape(-1, ACT_DIM))
         if c["distill_data"] == "round":
             Sx, Ax = DS[-1], DA[-1]
         else:  # accumulate every round's executed chunks
