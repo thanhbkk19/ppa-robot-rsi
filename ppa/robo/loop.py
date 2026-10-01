@@ -24,6 +24,7 @@ import numpy as np
 import torch
 
 from ppa.labels import AnchorSampler, RidgeResidual, label_batch
+from ppa.select import selection_probs
 from ppa.robo.env import Collector, ROOT, task_cfg
 from ppa.robo.generator import load_generator, sample, distill, load_demos
 from ppa.robo.critic import Critic
@@ -37,6 +38,8 @@ DEFAULTS = dict(
     distill_steps=1500, distill_lr=3e-5, distill_batch=512, rho=0.1,
     select=True, distill=True, filter_labels=None,   # filtered BC: select=False, K=1, filter_labels in {self,true}
     ridge_lam=1.0,
+    select_rule="argmax", beta=0.05, temp=0.03, kappa=1.0,   # selection over K (ppa/select.py)
+    eval_gen=False,      # also evaluate the generator alone (K = 1) every round (costs one more eval pass)
 )
 
 METHODS = {
@@ -52,6 +55,11 @@ METHODS = {
     "filtered_bc_self": dict(method="self", select=False, K=1, filter_labels="self"),
     "filtered_bc_true": dict(method="oracle", select=False, K=1, filter_labels="true"),
     "frozen_selector": dict(method="oracle", distill=False),
+    # pessimistic amplification (docs/PA_THEORY.md): true reward, only the selection rule changes
+    "pa_argmax": dict(method="oracle", select_rule="argmax"),
+    "pa_chi2": dict(method="oracle", select_rule="chi2"),
+    "pa_softmax": dict(method="oracle", select_rule="softmax"),
+    "pa_lcb": dict(method="oracle", select_rule="lcb"),
 }
 ANCHORED = {"anchor_only", "naive_mix", "plugin", "dr"}
 
@@ -67,8 +75,13 @@ def make_cfg(**kw):
     return cfg
 
 
+NEW_KEYS = ("select_rule", "beta", "temp", "kappa", "eval_gen")   # added for docs/PA_THEORY.md
+
+
 def cfg_hash(cfg):
-    keys = sorted(k for k in cfg if k not in ("seed", "name"))
+    # keys added later are hashed only when they differ from their default, so earlier run ids stay valid
+    keys = sorted(k for k in cfg if k not in ("seed", "name")
+                  and not (k in NEW_KEYS and cfg[k] == DEFAULTS[k]))
     return hashlib.sha1(json.dumps({k: cfg[k] for k in keys}, sort_keys=True).encode()).hexdigest()[:10]
 
 
@@ -143,27 +156,30 @@ class Run:
         os.replace(self.out + ".tmp", self.out)
 
     # ---------------------------------------------------------------- acting
-    def _act_fn(self, select):
+    def _act_fn(self, select, K=None):
         c = self.cfg
-        has_q = select and self.critic.n_updates > 0
+        K = c["K"] if K is None else K
+        has_q = select and self.critic.n_updates > 0 and K > 1
 
         def act(o, t):
-            cands = sample(self.gen, o, c["K"])
+            cands = sample(self.gen, o, K)
             if has_q:
-                q = self.critic.score(torch.as_tensor(o, dtype=torch.float32, device=cands.device), cands, t)
-                idx = q.argmax(1)
+                q = self.critic.score_ens(torch.as_tensor(o, dtype=torch.float32, device=cands.device), cands, t)
+                q = q / self.critic.gamma ** (self.T - 1 - t)   # MC targets are discounted: back to success scale
+                p = selection_probs(q, c["select_rule"], beta=c["beta"], temp=c["temp"], kappa=c["kappa"])
+                idx = torch.multinomial(p, 1).squeeze(1)
             else:
                 idx = torch.zeros(len(o), dtype=torch.long, device=cands.device)
             return cands[torch.arange(len(o), device=cands.device), idx].cpu().numpy()
         return act
 
-    def _collect(self, kind, seeds):
+    def _collect(self, kind, seeds, K=None):
         col = self.collectors[kind] if self.collectors else None
         if col is None:
             col = Collector(self.cfg["task"], self.cfg["n_envs"])
             self.collectors = self.collectors or {}
             self.collectors[kind] = col
-        return col.run(self._act_fn(self.cfg["select"]), seeds)
+        return col.run(self._act_fn(self.cfg["select"], K), seeds)
 
     # ---------------------------------------------------------------- labelling
     def _label(self, ep):
@@ -228,8 +244,18 @@ class Run:
     def evaluate(self):
         ev = self._collect("eval", eval_seeds(self.cfg["seed"], self.cfg["n_eval"]))
         v = self.V(ev["obs"][:, -1])
-        return dict(J=float(ev["y"].mean()), J_any=float(ev["y_any"].mean()), J_self=float(v.mean()),
-                    gap=float(v.mean() - ev["y"].mean()))
+        out = dict(J=float(ev["y"].mean()), J_any=float(ev["y_any"].mean()), J_self=float(v.mean()),
+                   gap=float(v.mean() - ev["y"].mean()))
+        if self.critic.n_updates > 0:
+            # critic optimism about its own first choice: E[Q_hat(s_0, a_0)] - realised success
+            dev = self.critic.dev
+            q0 = self.critic.score(torch.as_tensor(ev["obs"][:, 0], dtype=torch.float32, device=dev),
+                                   torch.as_tensor(ev["act"][:, 0:1], dtype=torch.float32, device=dev), 0)
+            out["opt0"] = float(q0.mean().item() / self.critic.gamma ** (self.T - 1) - ev["y"].mean())
+        if self.cfg["eval_gen"]:
+            eg = self._collect("eval", eval_seeds(self.cfg["seed"], self.cfg["n_eval"]), K=1)
+            out["J_gen"] = float(eg["y"].mean())
+        return out
 
     def run(self):
         c = self.cfg

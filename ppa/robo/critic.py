@@ -50,6 +50,14 @@ class Critic:
         tt = torch.full((B * K,), t, device=obs.device)
         return self.q(self._x(o, cands.reshape(B * K, *cands.shape[2:]), tt)).mean(0).view(B, K)
 
+    @torch.no_grad()
+    def score_ens(self, obs, cands, t):
+        """Like score, but returns every ensemble member: [n_ens, B, K] (for pessimistic selection rules)."""
+        B, K = cands.shape[:2]
+        o = obs.repeat_interleave(K, 0)
+        tt = torch.full((B * K,), t, device=obs.device)
+        return self.q(self._x(o, cands.reshape(B * K, *cands.shape[2:]), tt)).view(-1, B, K)
+
     def fit(self, obs, act, labels, steps, batch=1024):
         """obs [N, T+1, D], act [N, T, H, A], labels [N] (one per episode; any real value)."""
         if len(obs) == 0 or steps == 0:
