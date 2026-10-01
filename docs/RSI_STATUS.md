@@ -25,6 +25,17 @@ chunks back into the policy. This is PA-RL / V-GPS + distillation, run here on a
 The χ² rule fixes the K-inversion, but so does simply using K = 2. As an algorithm it is not a contribution
 on this testbed.
 
+## Second loop (after the user chose "find a new algorithm")
+- **Probe of true candidate values.** At most states the K candidates are nearly equivalent in true value.
+  The critic overstates their spread, and its Spearman correlation with the true values is 0.34. Selection
+  pays off only at a few states.
+- **H7 / P7, per-state certified-bound selection (lcbopt, bootstrap ensemble).** Fails: AUC 0.763 vs 0.808.
+- **H8 / P8, Rao–Blackwellised distillation.** It shrinks the distillation gap for soft rules, but argmax
+  K = 2 with the same re-selection is as good or better.
+
+Conclusion on Fetch: once the χ² step is small, the selection/distillation design space is saturated.
+Argmax K = 2 (optionally re-selected with the refit critic) matches every principled alternative we tried.
+
 ## Artifacts
 - `ppa/select.py` + tests: argmax, LCB, softmax, χ², χ²-trust-region selection
 - `docs/PA_THEORY.md`: Lemmas 1–3

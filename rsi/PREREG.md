@@ -95,3 +95,15 @@ The distillation compute is unchanged (same steps and batch). Control: argmax K 
 **P8:** on tune seeds 0–2, then held-out seeds 3–7, AUC of the best RB soft rule at K = 64 (χ² β = 0.05 or
 χ²-TR δ = 0.5, chosen on seeds 0–2) ≥ AUC of the better of {argmax K = 2, argmax K = 2 + rb} + 0.03 in the
 hard regime, and ≥ the same baseline − 0.01 in the easy regime.
+
+## Verdicts so far (tune seeds 0–2; no held-out run was launched for a hypothesis that failed here)
+| prediction | result | verdict |
+|---|---|---|
+| P1 argmax K-inversion | K = 2/4/16/64 → final 0.90/0.76/0.65/0.45 | holds (tune seeds) |
+| P3 χ² beats tuned argmax | χ² 0.910 vs argmax K = 2 0.895 | fails (difference within noise) |
+| P6 χ² wins when coverage is scarce | AUC 0.574 vs 0.630 | fails |
+| P7 lcbopt beats argmax (same critic) | AUC 0.763 vs 0.808 | fails |
+| P8 RB soft K = 64 beats argmax K = 2 (+rb) | hard: AUC 0.655 vs 0.663; easy: 0.809 vs 0.829 | fails |
+
+RB re-selection helps every rule a little (argmax K = 2: +0.017 easy, +0.033 hard). That is an
+engineering gain, not a new algorithm.
