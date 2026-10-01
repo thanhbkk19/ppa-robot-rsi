@@ -1,0 +1,6 @@
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+{'rule': 'softmax', 'K': 64, 'temp': 0.3, 'seed': 2} J_sys=0.86 J_gen=0.89 opt0=-0.03 curve=[0.46, 0.77, 0.81, 0.9, 0.91, 0.92, 0.86] (754s)
+{'rule': 'softmax', 'K': 64, 'temp': 0.3, 'seed': 1} J_sys=0.89 J_gen=0.79 opt0=-0.09 curve=[0.41, 0.72, 0.81, 0.85, 0.85, 0.85, 0.89] (754s)
+{'rule': 'softmax', 'K': 64, 'temp': 0.3, 'seed': 0} J_sys=0.89 J_gen=0.88 opt0=-0.02 curve=[0.42, 0.69, 0.83, 0.89, 0.91, 0.89, 0.89] (755s)
+{'rule': 'lcb', 'K': 64, 'kappa': 8.0, 'seed': 0} J_sys=0.40 J_gen=0.34 opt0=+0.11 curve=[0.42, 0.57, 0.66, 0.51, 0.58, 0.32, 0.4] (761s)

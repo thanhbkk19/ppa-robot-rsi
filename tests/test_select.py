@@ -56,3 +56,17 @@ def test_argmax_of_K_chi2_formula():
     for K in [2, 8, 32]:
         u = rng.random((400_000, K)).max(1)
         assert abs((K * u ** (K - 1)).mean() - 1 - (K - 1) ** 2 / (2 * K - 1)) < 0.05 * K
+
+
+def test_chi2_trust_region_binds_and_is_scale_free():
+    from ppa.select import chi2_trust_weights
+    rng = np.random.default_rng(4)
+    q = rng.random((30, 64)) * 0.2
+    for delta in [0.3, 1.3, 5.0]:
+        w = chi2_trust_weights(q, delta)
+        assert np.allclose(w.sum(1), 1)
+        assert np.allclose(chi2_divergence(w), delta, rtol=1e-3, atol=1e-3)
+        assert np.allclose(chi2_trust_weights(10 * q + 3, delta), w, atol=1e-6)    # invariant to affine rescaling
+        assert np.allclose(chi2_trust_weights(torch.tensor(q), delta).numpy(), w, atol=1e-5)
+    w = chi2_trust_weights(q[:, :4], 10.0)                    # delta >= K - 1: argmax
+    assert (w.argmax(1) == q[:, :4].argmax(1)).all() and np.allclose(w.max(1), 1, atol=1e-4)

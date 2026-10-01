@@ -45,7 +45,51 @@ def chi2_weights(q, beta):
     return w / w.sum(1, keepdims=True)
 
 
-def selection_probs(q_ens, rule="argmax", beta=0.05, temp=0.03, kappa=1.0):
+def chi2_trust_weights(q, delta, iters=40):
+    """chi^2 trust region: maximise sum_k w_k q_k  s.t.  chi2(w || uniform_K) <= delta, per row.
+    The solution is the chi^2 tilt chi2_weights(q, beta) with the row's beta set (bisection on log beta) so that
+    the constraint binds; if even argmax stays inside the region (delta >= K - 1) the row is argmax.
+    delta is scale-free (it does not depend on the units of q) and decouples the step size from K:
+    argmax-of-K has chi2 = (K-1)^2/(2K-1) to the proposal, so it couples both (docs/PA_THEORY.md Lemma 2)."""
+    T = _is_torch(q)
+    xp_log = (lambda x: torch.log(torch.as_tensor(x, dtype=q.dtype, device=q.device))) if T else np.log
+    n, K = q.shape
+    lo = xp_log(1e-6) * (torch.ones(n, 1, dtype=q.dtype, device=q.device) if T else np.ones((n, 1)))
+    hi = xp_log(1e3) * (torch.ones(n, 1, dtype=q.dtype, device=q.device) if T else np.ones((n, 1)))
+    exp = torch.exp if T else np.exp
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        w = _chi2_rowbeta(q, exp(mid))
+        too_far = chi2_divergence(w)[:, None] > delta          # beta too small -> raise it
+        lo = (mid * too_far + lo * ~too_far) if T else np.where(too_far, mid, lo)
+        hi = (hi * too_far + mid * ~too_far) if T else np.where(too_far, hi, mid)
+    return _chi2_rowbeta(q, exp(hi))
+
+
+def _chi2_rowbeta(q, beta):
+    """chi2_weights with a per-row beta [B, 1]."""
+    T = _is_torch(q)
+    K = q.shape[1]
+    if T:
+        qs = torch.sort(q, 1, descending=True).values
+        m = torch.arange(1, K + 1, device=q.device, dtype=q.dtype)
+        lam = (qs.cumsum(1) + 2 * beta * (m - K)) / m
+        ok = (1 + (qs - lam) / (2 * beta)) > 0
+        mstar = K - 1 - torch.argmax(ok.flip(1).to(torch.int8), 1)
+        l = lam.gather(1, mstar[:, None])
+        w = torch.clamp(1 + (q - l) / (2 * beta), min=0)
+        return w / w.sum(1, keepdim=True)
+    qs = -np.sort(-q, 1)
+    m = np.arange(1, K + 1)
+    lam = (qs.cumsum(1) + 2 * beta * (m - K)) / m
+    ok = 1 + (qs - lam) / (2 * beta) > 0
+    mstar = K - np.argmax(ok[:, ::-1], 1) - 1
+    l = lam[np.arange(len(q)), mstar][:, None]
+    w = np.maximum(0, 1 + (q - l) / (2 * beta))
+    return w / w.sum(1, keepdims=True)
+
+
+def selection_probs(q_ens, rule="argmax", beta=0.05, temp=0.03, kappa=1.0, delta=1.0):
     """q_ens [E, B, K] ensemble scores -> probabilities [B, K] over candidates (one-hot for argmax / lcb)."""
     T = _is_torch(q_ens)
     qm = q_ens.mean(0)
@@ -61,6 +105,8 @@ def selection_probs(q_ens, rule="argmax", beta=0.05, temp=0.03, kappa=1.0):
             z - z.max(1, keepdims=True)).sum(1, keepdims=True)
     if rule == "chi2":
         return chi2_weights(qm, beta)
+    if rule == "chi2tr":
+        return chi2_trust_weights(qm, delta)
     raise ValueError(rule)
 
 

@@ -24,7 +24,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", beta=0.1, temp=0.05, kappa=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -62,6 +62,10 @@ def select_fn(c, critic, rng):
             j = (p.cumsum(1) < rng.random((n, 1))).sum(1).clip(0, K - 1)
         elif rule == "chi2":
             p = chi2_weights(qm, c["beta"])
+            j = (p.cumsum(1) < rng.random((n, 1))).sum(1).clip(0, K - 1)
+        elif rule == "chi2tr":
+            from ppa.select import chi2_trust_weights
+            p = chi2_trust_weights(qm, c["delta"])
             j = (p.cumsum(1) < rng.random((n, 1))).sum(1).clip(0, K - 1)
         else:
             raise ValueError(rule)
@@ -149,8 +153,12 @@ def job(args):
 
 if __name__ == "__main__":
     from multiprocessing import Pool
-    name, spec = sys.argv[1], json.loads(sys.argv[2])
-    keys = list(spec)
-    cfgs = [dict(zip(keys, v)) for v in itertools.product(*[spec[k] for k in keys])]
+    name, spec = sys.argv[1], json.loads(sys.argv[2] if not sys.argv[2].endswith(".json") else open(sys.argv[2]).read())
+    specs = spec if isinstance(spec, list) else [spec]   # a list of grids is run in one pool
+    cfgs = []
+    for sp in specs:
+        keys = list(sp)
+        cfgs += [dict(zip(keys, v)) for v in itertools.product(*[sp[k] for k in keys])]
+    cfgs.sort(key=lambda c: -c.get("K", 4))             # longest runs first
     with Pool(int(sys.argv[3]) if len(sys.argv) > 3 else 4) as p:
         list(p.imap_unordered(job, [(name, c) for c in cfgs], chunksize=1))

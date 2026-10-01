@@ -9,7 +9,7 @@ from collections import defaultdict
 import numpy as np
 from scipy import stats
 
-PARAM = {"chi2": "beta", "softmax": "temp", "lcb": "kappa", "argmax": None}
+PARAM = {"chi2": "beta", "chi2tr": "delta", "softmax": "temp", "lcb": "kappa", "argmax": None}
 
 
 def load(dirs, seeds=None, lr=3e-5):

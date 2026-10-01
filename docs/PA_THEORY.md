@@ -55,6 +55,21 @@ of Them?"). Properties:
   critic's spread over the candidates exceeds its error spread**, which is a per-state signal-to-noise
   condition. Where σ̂ ≤ ε the bound says do not select, i.e. keep the generator.
 
+**Corollary (argmax couples coverage and step size).** In the loop, K plays two roles:
+- **Coverage.** P(some candidate is good) = 1 − (1 − m)^K.
+- **Step size.** χ²(π_K‖μ) ≈ K/2 is how far one round moves the proposal, and by Lemma 1 it is also how much
+  critic error the round can exploit.
+
+Argmax ties the two together, so buying coverage with more K also takes a larger, less certified step.
+A χ² *trust region* separates them: maximise E_w[Q̂] subject to χ²(w‖uniform_K) ≤ δ. The solution is the χ²
+tilt with a per-state β chosen so the constraint binds (`ppa/select.py:chi2_trust_weights`).
+- K then sets coverage only.
+- δ sets the step size. It is scale-free (invariant to affine rescaling of Q̂), and δ = (K₀−1)²/(2K₀−1)
+  reproduces the step of argmax-of-K₀.
+
+Prediction P5: with δ ≈ 1.3, the step of argmax-of-4, the trust-region rule at K = 64 beats argmax at
+K = 4, because the step is the same and coverage is better.
+
 ## 3. RSI-specific statements (to be proved or refuted)
 **Theorem 4 (sketch: monotone self-improvement).** Assume the critic of round r is fit on data from π_{r−1}
 and distillation is exact (μ_r = π_{r−1}). Then the error that Lemma 1 needs, sd_{μ_r}(e_r), is an
