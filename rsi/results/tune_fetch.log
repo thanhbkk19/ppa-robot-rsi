@@ -1,0 +1,9 @@
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+{'rule': 'chi2', 'K': 64, 'beta': 0.05, 'seed': 0} J_sys=0.92 J_gen=0.88 opt0=-0.05 curve=[0.42, 0.83, 0.88, 0.9, 0.89, 0.9, 0.92] (677s)
+{'rule': 'chi2', 'K': 64, 'beta': 0.02, 'seed': 1} J_sys=0.79 J_gen=0.76 opt0=-0.02 curve=[0.41, 0.78, 0.81, 0.78, 0.77, 0.8, 0.79] (682s)
+{'rule': 'chi2', 'K': 64, 'beta': 0.02, 'seed': 2} J_sys=0.87 J_gen=0.83 opt0=+0.01 curve=[0.46, 0.85, 0.8, 0.83, 0.81, 0.86, 0.87] (683s)
+{'rule': 'chi2', 'K': 64, 'beta': 0.02, 'seed': 0} J_sys=0.81 J_gen=0.73 opt0=+0.07 curve=[0.42, 0.86, 0.84, 0.81, 0.81, 0.79, 0.81] (683s)
+{'rule': 'chi2', 'K': 64, 'beta': 0.05, 'seed': 1} J_sys=0.90 J_gen=0.85 opt0=-0.04 curve=[0.41, 0.79, 0.85, 0.91, 0.92, 0.86, 0.9] (710s)
+{'rule': 'chi2', 'K': 64, 'beta': 0.05, 'seed': 2} J_sys=0.92 J_gen=0.84 opt0=-0.06 curve=[0.46, 0.86, 0.86, 0.93, 0.93, 0.91, 0.92] (710s)
+{'rule': 'chi2', 'K': 64, 'beta': 0.1, 'seed': 1} J_sys=0.93 J_gen=0.85 opt0=-0.07 curve=[0.41, 0.8, 0.89, 0.88, 0.86, 0.92, 0.93] (712s)
+{'rule': 'chi2', 'K': 64, 'beta': 0.1, 'seed': 0} J_sys=0.84 J_gen=0.84 opt0=+0.01 curve=[0.42, 0.77, 0.87, 0.9, 0.88, 0.92, 0.84] (713s)
