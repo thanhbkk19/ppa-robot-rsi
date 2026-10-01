@@ -24,8 +24,15 @@ class Envs:
         self.envs = [gym.make(task, max_episode_steps=10_000) for _ in range(n)]
         self.n = n
 
-    def reset(self, seeds):
+    def reset(self, seeds, heights=None):
+        """heights: optional goal height above the object's resting height, per env (None = env default
+        goal distribution: on the table or, half of the time, up to 0.45 m in the air)."""
         obs = [e.reset(seed=int(s))[0] for e, s in zip(self.envs, seeds)]
+        if heights is not None:
+            for i, (e, h) in enumerate(zip(self.envs, heights)):
+                u = e.unwrapped
+                u.goal = u.goal.copy(); u.goal[2] = obs[i]["achieved_goal"][2] + float(h)
+                obs[i] = u._get_obs()
         return np.stack([np.r_[o["observation"], o["desired_goal"]] for o in obs]).astype(np.float32)
 
     def get_state(self, i):
@@ -74,13 +81,14 @@ def scripted(o, phase, rng, noise):
     return np.clip(a, -1, 1)
 
 
-def collect_demos(n_eps, noise, seed, n_envs=50):
-    """Scripted episodes -> (S, A chunks, success). S rows: [obs(28), t/NDEC]."""
+def collect_demos(n_eps, noise, seed, n_envs=50, table_only=False):
+    """Scripted episodes -> (S, A chunks, success). S rows: [obs(28), t/NDEC].
+    table_only: every demo goal lies on the table (height 0), so lifting is never demonstrated."""
     rng = np.random.default_rng(seed)
     E = Envs(n_envs)
     S, A, Ys = [], [], []
     for b in range(0, n_eps, n_envs):
-        o = E.reset([seed * 100_000 + b + i for i in range(n_envs)])
+        o = E.reset([seed * 100_000 + b + i for i in range(n_envs)], heights=np.zeros(n_envs) if table_only else None)
         phase = np.zeros(n_envs, int)
         # per-episode noise level: a mixture of good and sloppy operators
         lvl = noise * rng.exponential(1.0, n_envs)[:, None]

@@ -24,17 +24,18 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", train_h=None, eval_h=None, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
     os.makedirs(CACHE, exist_ok=True)
-    f = os.path.join(CACHE, f"bc_n{c['n_demo']}_z{c['demo_noise']}_s{c['seed']}.pt")
+    tag = "" if c["demo_goals"] == "env" else f"_{c['demo_goals']}"
+    f = os.path.join(CACHE, f"bc_n{c['n_demo']}_z{c['demo_noise']}{tag}_s{c['seed']}.pt")
     if os.path.exists(f):
         st = torch.load(f, weights_only=False)
         gen = Diffusion(OBS_DIM, ACT_DIM); gen.load_state_dict(st["gen"])
         return gen, st["S"], st["A"]
-    S, A, Y = collect_demos(c["n_demo"], c["demo_noise"], seed=1000 + c["seed"])
+    S, A, Y = collect_demos(c["n_demo"], c["demo_noise"], seed=1000 + c["seed"], table_only=c["demo_goals"] == "table")
     S = S.reshape(-1, OBS_DIM); A = A.reshape(-1, ACT_DIM)
     torch.manual_seed(c["seed"])
     gen = Diffusion(OBS_DIM, ACT_DIM); gen.fit(S, A, c["bc_steps"], c["seed"])
@@ -99,12 +100,21 @@ def select_weights(c, critic, S, C):
     raise ValueError(rule)
 
 
-def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False):
+def heights_for(seeds, rng_h):
+    """Goal heights for a list of episode seeds: None (env default) or [lo, hi] -> uniform, deterministic per seed."""
+    if rng_h is None:
+        return None
+    lo, hi = rng_h
+    return np.array([lo + (hi - lo) * ((s * 0.6180339887498949) % 1.0) for s in seeds])
+
+
+def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None):
     """Run len(seeds) episodes (batches of envs.n). Returns S (n, NDEC, s), A (n, NDEC, a), Y (n,), diag.
     keep_cands: diag["C"] holds every candidate set (n, NDEC, K, a) for Rao-Blackwellised distillation."""
     S_all, A_all, Y_all, spread, ens_sd, C_all = [], [], [], [], [], []
+    hs = heights_for(seeds, h_range)
     for b in range(0, len(seeds), envs.n):
-        o = envs.reset(seeds[b:b + envs.n])
+        o = envs.reset(seeds[b:b + envs.n], None if hs is None else hs[b:b + envs.n])
         S_ep, A_ep, C_ep = [], [], []
         for t in range(NDEC):
             S = np.c_[o, np.full(envs.n, t / NDEC)].astype(np.float32)
@@ -138,11 +148,11 @@ def run(cfg, out=None):
     t0 = time.time()
 
     def evaluate(rnd, extra):
-        S, A, Y, d = episodes(gen, envs, eval_seeds, c["K"], select_fn(c, critic, rng), rng)
+        S, A, Y, d = episodes(gen, envs, eval_seeds, c["K"], select_fn(c, critic, rng), rng, h_range=c["eval_h"])
         opt0 = float("nan")
         if critic.trained:
             opt0 = float(critic(np.c_[S[:, 0], A[:, 0]]).mean() - Y.mean())
-        _, _, Yg, _ = episodes(gen, envs, eval_seeds, 1, select_fn(c, critic, rng), rng)
+        _, _, Yg, _ = episodes(gen, envs, eval_seeds, 1, select_fn(c, critic, rng), rng, h_range=c["eval_h"])
         hist.append(dict(round=rnd, J_sys=float(Y.mean()), J_gen=float(Yg.mean()), opt0=opt0,
                          wall=time.time() - t0, **d, **extra))
         if out:
@@ -152,7 +162,7 @@ def run(cfg, out=None):
     for r in range(1, c["rounds"] + 1):
         seeds = [100_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_train"])]
         sel = select_fn(c, critic, rng)
-        S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"])
+        S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"], h_range=c["train_h"])
         d["sel_chi2"] = float(np.mean(sel.chi2)) if sel.chi2 else float("nan")
         X3 = np.concatenate([S, A], -1)                                   # (n, NDEC, s + a)
         RX.append(X3.reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.repeat(Y, NDEC))
