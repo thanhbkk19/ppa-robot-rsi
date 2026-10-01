@@ -90,23 +90,26 @@ def _chi2_rowbeta(q, beta):
 
 
 def lcb_opt_weights(q, c, iters=50):
-    """Per-row maximiser of the certified lower bound  w.q - c ||w||_2  over the simplex (docs/PA_THEORY.md
-    Lemma 1 with error scale c = z * eps(s)). KKT: w is proportional to (q - lam)_+ with ||(q - lam)_+||_2 = c.
-    If the top gap exceeds c the solution is argmax; as c grows it flattens to uniform (no selection).
-    q [B, K]; c [B] or scalar (>= 0). NumPy only (the Fetch testbed); see chi2_weights for a torch version."""
+    """Per-row maximiser of Lemma 1's certified lower bound for the empirical proposal (uniform over K):
+        w.q - c * sqrt(chi2(w || u)),   chi2(w || u) = K ||w||^2 - 1,   c = z * eps(s) >= 0.
+    KKT: w is proportional to u = (q - lam)_+ with  sd_k(u) = c  (population sd over the K entries).
+    If sd_k(q) <= c the critic's spread does not exceed its error and the solution is uniform (no selection,
+    docs/PA_THEORY.md Lemma 3); otherwise lam rises, truncating low candidates, until the truncated spread is c.
+    q [B, K]; c [B] or scalar. NumPy only (Fetch testbed)."""
     q = np.asarray(q, float)
     n, K = q.shape
     c = np.broadcast_to(np.asarray(c, float), (n,))[:, None]
-    hi = q.max(1, keepdims=True)                              # ||(q - hi)_+|| = 0 <= c
-    lo = q.min(1, keepdims=True) - c - 1e-12                  # ||(q - lo)_+|| >= sqrt(K) c >= c
+    sd = lambda lam: np.maximum(q - lam, 0).std(1, keepdims=True)
+    lo = q.min(1, keepdims=True); hi = q.max(1, keepdims=True)      # sd(lo) = sd(q), sd(hi) = 0
     for _ in range(iters):
         mid = (lo + hi) / 2
-        f = np.sqrt((np.maximum(q - mid, 0) ** 2).sum(1, keepdims=True))
-        big = f > c
+        big = sd(mid) > c
         lo = np.where(big, mid, lo); hi = np.where(big, hi, mid)
-    w = np.maximum(q - hi, 0)
-    s = w.sum(1, keepdims=True)
-    w = np.where(s > 0, w / np.where(s > 0, s, 1), np.eye(K)[q.argmax(1)])
+    u = np.maximum(q - lo, 0)
+    flat = q.std(1, keepdims=True) <= c                               # no certified improvement: uniform
+    w = np.where(flat, 1.0, u)
+    s_ = w.sum(1, keepdims=True)
+    w = np.where(s_ > 0, w / np.where(s_ > 0, s_, 1), np.eye(K)[q.argmax(1)])
     return w
 
 

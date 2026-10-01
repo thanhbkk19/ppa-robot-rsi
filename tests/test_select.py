@@ -76,10 +76,10 @@ def test_lcb_opt_weights_limits_and_optimality():
     from ppa.select import lcb_opt_weights
     rng = np.random.default_rng(5)
     q = rng.random((40, 16)) * 0.3
-    assert (lcb_opt_weights(q, 1e-9).argmax(1) == q.argmax(1)).all()          # c -> 0: argmax
-    assert np.allclose(lcb_opt_weights(q, 1e3), 1 / 16, atol=1e-3)            # c -> inf: uniform
-    obj = lambda w, qq, c: (w * qq).sum() - c * np.sqrt((w ** 2).sum())
-    for c in [0.02, 0.1, 0.4]:
+    assert (lcb_opt_weights(q, 1e-9).argmax(1) == q.argmax(1)).all()          # c -> 0: greedy
+    assert np.allclose(lcb_opt_weights(q, 1.0), 1 / 16)                       # sd(q) <= c: uniform
+    obj = lambda w, qq, c: (w * qq).sum() - c * np.sqrt(max(16 * (w ** 2).sum() - 1, 0))
+    for c in [0.01, 0.03, 0.06]:
         W = lcb_opt_weights(q, c)
         assert np.allclose(W.sum(1), 1)
         for i in range(3):

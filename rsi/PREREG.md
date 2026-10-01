@@ -71,3 +71,8 @@ argmax at K ∈ {2, 4} (its own tuning budget).
 
 **P7:** on held-out seeds 3–7, in both the easy and the hard regime, AUC of lcbopt (best z, K = 64) ≥ AUC of
 argmax (same critic, best K ∈ {2, 4}) + 0.03, with the paired 95% interval above 0 in at least one regime.
+- **Bug fix (before any valid lcbopt result):** the first implementation penalised z·ε·‖w‖₂ instead of
+  z·ε·sqrt(χ²(w‖u)) = z·ε·sqrt(K‖w‖² − 1). At K = 64 that is a √K-times-weaker penalty, so it behaved like
+  argmax (selection χ² 8–30). Those runs are kept under `rsi/results/invalid_lcbopt_missing_sqrtK`.
+  The corrected solution: w ∝ (q̄ − λ)₊ with sd_k((q̄ − λ)₊) = z·ε(s), and uniform weights when
+  sd_k(q̄) ≤ z·ε(s). The tuning grid is unchanged: z ∈ {0.5, 1, 2}.
