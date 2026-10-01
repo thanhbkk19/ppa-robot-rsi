@@ -13,3 +13,7 @@ checkpoints/
 wandb/
 scale/results/**/raw/
 .pytest_cache/
+scale/results/logs/
+scale/results/runs.csv.lock
+scale/results/runs.csv.tmp
+*.json.tmp
