@@ -23,7 +23,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
-           n_demo=600, demo_noise=0.3, bc_steps=15000, distill_steps=1500, distill_lr=3e-4,
+           n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
            critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", beta=0.1, temp=0.05, kappa=1.0)
 
 
@@ -125,7 +125,11 @@ def run(cfg, out=None):
         nm = int(c["rho"] * len(Sx)); i = rng.integers(0, len(Sd), nm)
         gen.fit(np.concatenate([Sx, Sd[i]]), np.concatenate([Ax, Ad[i]]), c["distill_steps"],
                 c["seed"] * 100 + r, lr=c["distill_lr"])
-        evaluate(r, dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"]))
+        extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"])
+        if r in c.get("probe", []):
+            from rsi.probe import probe
+            extra["probe"] = probe(gen, critic, select_fn(c, critic, rng), c["K"], c["seed"] * 100 + r, rng=rng)
+        evaluate(r, extra)
     return dict(cfg=c, hist=hist)
 
 

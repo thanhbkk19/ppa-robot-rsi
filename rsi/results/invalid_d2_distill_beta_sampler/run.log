@@ -1,0 +1,9 @@
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+{'rule': 'argmax', 'K': 4, 'distill_lr': 3e-05, 'distill_data': 'replay', 'seed': 0} J_sys=0.39 J_gen=0.21 opt0=+0.03 curve=[0.3, 0.42, 0.43, 0.45, 0.4, 0.39, 0.39] (500s)
+{'rule': 'argmax', 'K': 4, 'distill_lr': 3e-05, 'distill_data': 'round', 'seed': 1} J_sys=0.42 J_gen=0.24 opt0=-0.01 curve=[0.31, 0.47, 0.41, 0.34, 0.4, 0.38, 0.42] (500s)
+{'rule': 'argmax', 'K': 4, 'distill_lr': 3e-05, 'distill_data': 'round', 'seed': 2} J_sys=0.46 J_gen=0.26 opt0=-0.03 curve=[0.4, 0.43, 0.42, 0.46, 0.3, 0.29, 0.46] (500s)
+{'rule': 'argmax', 'K': 4, 'distill_lr': 3e-05, 'distill_data': 'round', 'seed': 0} J_sys=0.40 J_gen=0.20 opt0=+0.02 curve=[0.3, 0.42, 0.36, 0.32, 0.39, 0.34, 0.4] (501s)
+{'rule': 'argmax', 'K': 4, 'distill_lr': 0.0001, 'distill_data': 'round', 'seed': 1} J_sys=0.29 J_gen=0.23 opt0=+0.10 curve=[0.31, 0.47, 0.41, 0.29, 0.35, 0.37, 0.29] (554s)
+{'rule': 'argmax', 'K': 4, 'distill_lr': 0.0001, 'distill_data': 'round', 'seed': 0} J_sys=0.36 J_gen=0.20 opt0=+0.00 curve=[0.3, 0.41, 0.36, 0.31, 0.33, 0.28, 0.36] (555s)
+{'rule': 'argmax', 'K': 4, 'distill_lr': 3e-05, 'distill_data': 'replay', 'seed': 1} J_sys=0.47 J_gen=0.23 opt0=-0.03 curve=[0.31, 0.47, 0.41, 0.42, 0.48, 0.42, 0.47] (559s)
+{'rule': 'argmax', 'K': 4, 'distill_lr': 3e-05, 'distill_data': 'replay', 'seed': 2} J_sys=0.47 J_gen=0.27 opt0=+0.02 curve=[0.4, 0.43, 0.41, 0.42, 0.41, 0.38, 0.47] (561s)

@@ -28,6 +28,22 @@ class Envs:
         obs = [e.reset(seed=int(s))[0] for e, s in zip(self.envs, seeds)]
         return np.stack([np.r_[o["observation"], o["desired_goal"]] for o in obs]).astype(np.float32)
 
+    def get_state(self, i):
+        import mujoco
+        u = self.envs[i].unwrapped
+        st = np.empty(mujoco.mj_stateSize(u.model, mujoco.mjtState.mjSTATE_INTEGRATION))
+        mujoco.mj_getState(u.model, u.data, st, mujoco.mjtState.mjSTATE_INTEGRATION)
+        return st, u.goal.copy()
+
+    def set_state(self, i, state):
+        import mujoco
+        u = self.envs[i].unwrapped
+        mujoco.mj_setState(u.model, u.data, state[0], mujoco.mjtState.mjSTATE_INTEGRATION)
+        u.goal = state[1].copy()
+        mujoco.mj_forward(u.model, u.data)
+        o = u._get_obs()
+        return np.r_[o["observation"], o["desired_goal"]].astype(np.float32)
+
     def step_chunk(self, chunk, n_steps):
         """chunk (n, H*4) -> executes the first n_steps low-level actions. Returns obs, success flags."""
         a = chunk.reshape(self.n, H, 4)

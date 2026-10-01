@@ -15,11 +15,15 @@ def mlp(i, o, h=256, n=3):
 class Diffusion(nn.Module):
     """x_0 = action chunk in [-1, 1]^A conditioned on s. 20-step DDPM with epsilon prediction."""
 
-    def __init__(self, s_dim, a_dim, N=20, h=256):
+    def __init__(self, s_dim, a_dim, N=20, h=256, var="posterior"):
         super().__init__()
         self.N, self.a_dim = N, a_dim
         b = torch.linspace(1e-4, 0.2, N); self.register_buffer("b", b)
-        self.register_buffer("al", torch.cumprod(1 - b, 0))
+        al = torch.cumprod(1 - b, 0); self.register_buffer("al", al)
+        # reverse-process variance: "beta" (sigma_k^2 = beta_k, DDPM's upper choice) or "posterior"
+        # (sigma_k^2 = beta_k (1 - al_{k-1}) / (1 - al_k), the true posterior variance, DDPM's lower choice)
+        al_prev = torch.cat([torch.ones(1), al[:-1]])
+        self.register_buffer("sig2", b if var == "beta" else b * (1 - al_prev) / (1 - al), persistent=False)
         self.net = mlp(a_dim + s_dim + 1, a_dim, h)
         self.opt = None
 
@@ -55,7 +59,7 @@ class Diffusion(nn.Module):
             ab, b = self.al[k], self.b[k]
             x = (x - b / (1 - ab).sqrt() * eps) / (1 - b).sqrt()
             if k > 0:
-                x += b.sqrt() * torch.randn(x.shape, generator=g)
+                x += self.sig2[k].sqrt() * torch.randn(x.shape, generator=g)
         return x.clamp(-1, 1).numpy()
 
 
