@@ -473,3 +473,17 @@ Predictions:
   (J_full ≥ best fixed K).
   - If it passes → held-out seeds 5–9, paired against the replay control and the best fixed K on the same
     seeds.
+
+## P17 verdict (final, tune seeds 0–2)
+| config | J_target | J_easy | J_full |
+|---|---|---|---|
+| control | 0.085 | 0.63 | 0.287 |
+| B1 balanced | 0.110 | 0.53 | 0.260 |
+| B2 balanced + qgrad 0.1 | 0.190 | 0.437 | 0.300 |
+| **B3 balanced + distil lr 3e-4** | **0.188** | **0.593** | **0.357** |
+| criterion | ≥ 0.165 | ≥ 0.58 | ≥ 0.337 |
+
+**B3 holds on tune seeds** (selected over B2 on J_full).
+- Per seed (J_target / J_easy / J_full): 0.19/0.54/0.35, 0.03/0.47/0.24, 0.345/0.77/0.48. High variance.
+- The same lr without balancing (P14 held-out) failed through easy-goal forgetting; balancing is the change.
+- As pre-registered: held-out seeds 3–7 with the same three criteria, paired against `stability_heldout` replay.
