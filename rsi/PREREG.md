@@ -231,3 +231,21 @@ J_full at round 10 is ≥ +0.05.
 
 **Held-out result (seeds 3–7):** J_easy +0.330 [0.086, 0.574], J_full +0.200 [0.045, 0.355] → **passes**.
 J_target +0.105 [−0.020, 0.230] (not a criterion).
+
+## Amendment I (written before any P14 run): generator plasticity and sampling temperature
+Context: `rsi/results/M3_M5_FRONTIER.md`. Base: the P13 replay configuration (argmax K = 64, filtered init,
+curriculum + HER, replay, 10 rounds); control = `rsi/results/stability` replay runs, seeds 0–2.
+Factors:
+- **plasticity:** distil lr 3e-5 → 3e-4. Mechanism: the generator learns goal-height-dependent lifting.
+- **temperature:** sampling temperature 1.0 → 1.5 (initial and per-step DDPM noise scaled), which widens the
+  candidate spread. Mechanism: a larger reach per decision.
+
+Grid: 2 × 2 with the control reused (3 new configs × seeds 0–2).
+Predictions (means over seeds 0–2, round 10):
+- **P14a** (plasticity): the generator's goal slope (M5: mean up at h = 0.30 minus at h = 0, held states) is
+  ≥ 3 × the control's, and J_full ≥ control + 0.05.
+- **P14b** (temperature): training lift p95 ≥ control + 0.03, and J_target ≥ control + 0.05.
+- **P14c** (both): J_target ≥ control + 0.08.
+
+Mechanism metrics are reported whatever the outcome: M4 lift per decision and M5 goal slope from the saved
+final models.

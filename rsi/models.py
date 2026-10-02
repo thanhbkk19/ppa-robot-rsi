@@ -26,6 +26,7 @@ class Diffusion(nn.Module):
         self.register_buffer("sig2", b if var == "beta" else b * (1 - al_prev) / (1 - al), persistent=False)
         self.net = mlp(a_dim + s_dim + 1, a_dim, h)
         self.opt = None
+        self.temp = 1.0       # sampling temperature: scales the initial and the per-step noise
 
     def loss(self, S, A, g, w=None):
         n = len(S)
@@ -53,13 +54,13 @@ class Diffusion(nn.Module):
     def sample(self, S, seed):
         g = torch.Generator().manual_seed(int(seed))
         S = torch.as_tensor(S, dtype=torch.float32)
-        x = torch.randn(len(S), self.a_dim, generator=g)
+        x = self.temp * torch.randn(len(S), self.a_dim, generator=g)
         for k in reversed(range(self.N)):
             eps = self.net(torch.cat([x, S, torch.full((len(S), 1), k / self.N)], 1))
             ab, b = self.al[k], self.b[k]
             x = (x - b / (1 - ab).sqrt() * eps) / (1 - b).sqrt()
             if k > 0:
-                x += self.sig2[k].sqrt() * torch.randn(x.shape, generator=g)
+                x += self.temp * self.sig2[k].sqrt() * torch.randn(x.shape, generator=g)
         return x.clamp(-1, 1).numpy()
 
 
