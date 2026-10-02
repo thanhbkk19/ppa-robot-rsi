@@ -437,3 +437,39 @@ default must be the large K.
 - B2 fails on J_easy (−0.19) and J_full (+0.013).
 - Balanced weighting does not protect easy goals; it slightly helps with qgrad (0.44 vs 0.37 J_easy,
   0.19 vs 0.15 J_target).
+
+## Amendment N (written before any FAS-v2 run): FAS v2, rewarded by the target event (P19)
+Diagnosis from P18, M6 and M7:
+- (i) The progress proxy was gamed (M7).
+- (ii) The FAS-v1 generator alone (K = 1) reaches 0.92 on easy goals vs 0.65 for the control generator.
+  Small K *during training* stops the corruption of easy-goal behaviour, so this is a training effect, not
+  only a deployment one.
+- (iii) The FAS-v1 frontier is gone even at K = 64. Large K *during training* at the frontier is what
+  creates take-off.
+- (iv) B2 (balanced + qgrad) models: K choice at deployment recovers only part of the easy loss
+  (K = 2: 0.66 vs K = 64: 0.52; generator 0.47). The rest is forgetting caused by training.
+
+FAS v2 (`fas_reward="success"`, `fas_gate=True`), two arms K ∈ {2, 64}:
+- **Reward:** success only (the target event, no proxy). Discount γ = 0.7, as in v1.
+- **Default:** K = 64 (coverage: 1 − (1 − m)^K) in every bin with fewer than 1 discounted success.
+- **Training:** Thompson sampling in eligible bins.
+- **Deployment:** K = 2 only if P(θ₂ > θ₆₄ | data) ≥ 0.8 AND arm 2 has ≥ 5 effective trials; otherwise 64.
+- The smoke test (`seed 99`, tiny budget) found that the uniform prior on an untried arm wins against a
+  low-success incumbent. This is why the deployment rule uses superiority probability with a minimum of
+  evidence, fixed before any real run.
+
+Configurations (tune seeds 0–2, same replay base as P18):
+- F2: FAS v2.
+- F3: FAS v2 + balanced + qgrad η = 0.1, i.e. combined with the highest-frontier config B2.
+
+Tuning budget of the FAS family: v1, F2, F3 = 3 configs, the same as fixed K ∈ {4, 16, 64}.
+
+Predictions:
+- F2: J_easy ≥ 0.85, J_target within ±0.03 of the control (0.085), arm 2 on bins below 5 cm and 64 above
+  10 cm.
+- F3: J_target ≥ 0.15 and J_easy ≥ 0.70.
+- **P19 (pass/fail):** the better of F2/F3 on J_full (tune seeds, round 10) satisfies the P18 criteria
+  (J_easy ≥ control + 0.10, J_target ≥ control − 0.02, J_full ≥ control + 0.05) AND P18b
+  (J_full ≥ best fixed K).
+  - If it passes → held-out seeds 5–9, paired against the replay control and the best fixed K on the same
+    seeds.

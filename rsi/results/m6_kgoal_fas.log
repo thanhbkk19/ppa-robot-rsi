@@ -1,0 +1,4 @@
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+seed 0 | easy  K=1/2/4/64: 0.89 / 0.98 / 0.96 / 0.82 | high K=1/2/4/64: 0.00 / 0.00 / 0.00 / 0.00
+seed 1 | easy  K=1/2/4/64: 0.91 / 0.97 / 0.92 / 0.79 | high K=1/2/4/64: 0.00 / 0.00 / 0.00 / 0.01
+seed 2 | easy  K=1/2/4/64: 0.95 / 0.99 / 0.96 / 0.82 | high K=1/2/4/64: 0.00 / 0.00 / 0.00 / 0.00

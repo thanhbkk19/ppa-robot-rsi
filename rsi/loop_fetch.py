@@ -25,7 +25,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, fas=False, fas_arms=(2, 64), fas_gamma=0.7, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, fas=False, fas_arms=(2, 64), fas_gamma=0.7, fas_reward="progress", fas_gate=False, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -231,14 +231,27 @@ def run(cfg, out=None):
     arms = np.array(c["fas_arms"])
     fas_s, fas_n = np.ones((nb, len(arms))), np.full((nb, len(arms)), 2.0)    # Beta(1, 1) per (height bin, arm)
 
+    def eligible(b):     # evidence gate: a bin may leave the largest arm only once it has produced a success
+        return (fas_s[b] - 1).sum(1) >= 1 if c["fas_gate"] else np.ones(len(b), bool)
+
     def k_thompson(h):   # training: Thompson sampling over the arms, per goal-height bin
         b = np.clip(np.searchsorted(edges, h, side="right") - 1, 0, nb - 1)
         draw = rng.beta(fas_s[b], fas_n[b] - fas_s[b])
-        return arms[draw.argmax(1)]
+        return np.where(eligible(b), arms[draw.argmax(1)], arms.max())
 
-    def k_greedy(h):     # deployment: the arm with the higher posterior mean, per goal-height bin
+    def k_greedy(h):     # deployment arm per goal-height bin
         b = np.clip(np.searchsorted(edges, h, side="right") - 1, 0, nb - 1)
-        return arms[(fas_s[b] / fas_n[b]).argmax(1)]
+        if c["fas_gate"]:
+            # v2 (two arms): the large arm is the default; switch to the small arm only on evidence,
+            # P(theta_small > theta_large | data) >= 0.8 under the Beta posteriors, with >= 5 effective trials of the
+            # small arm, and only in eligible bins
+            a_, b_ = fas_s[b], fas_n[b] - fas_s[b]
+            dr = np.random.default_rng(0)
+            th = dr.beta(a_[:, :, None], b_[:, :, None], size=(len(b), 2, 2000))
+            p_small = (th[:, 0] > th[:, 1]).mean(1)
+            return np.where(eligible(b) & (p_small >= 0.8) & (fas_n[b][:, 0] - 2 >= 5), arms[0], arms[1])
+        mean = fas_s[b] / fas_n[b]    # v1: posterior mean, ties to the largest arm
+        return arms[len(arms) - 1 - mean[:, ::-1].argmax(1)]
 
     def prime(sel, train=False):   # give the selection rule predictable estimates (past training rounds only)
         sel.m_global = m_last[0]
@@ -273,7 +286,7 @@ def run(cfg, out=None):
             d0 = np.linalg.norm(S[:, 0, 25:28] - S[:, 0, 3:6], axis=1)
             d1 = np.linalg.norm(S[:, 0, 25:28] - d["final_obj"], axis=1)
             prog = np.clip(1 - d1 / np.maximum(d0, 1e-6), 0, 1)
-            rew = (rng.random(len(Y)) < np.maximum(Y, prog)).astype(float)
+            rew = Y.astype(float) if c["fas_reward"] == "success" else (rng.random(len(Y)) < np.maximum(Y, prog)).astype(float)
             bi = np.clip(np.searchsorted(edges, d["heights"], side="right") - 1, 0, nb - 1)
             ai = np.searchsorted(arms, d["k_used"])
             # discounted Thompson sampling (the generator and critic change every round): shrink past evidence
@@ -364,7 +377,8 @@ def run(cfg, out=None):
         extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"], **gate_info,
                      max_lift=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95)),
                      curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None, round_bins=round_bins,
-                     fas_arm=[int(a) for a in arms[(fas_s / fas_n).argmax(1)]] if c["fas"] else None,
+                     fas_arm=[int(a) for a in k_greedy((edges[:-1] + edges[1:]) / 2)] if c["fas"] else None,
+                     fas_post=(fas_s / fas_n).round(3).tolist() if c["fas"] else None,
                      train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"], moved_frac=d.get("moved_frac"))
         if r in c.get("probe", []):
             from rsi.probe import probe
