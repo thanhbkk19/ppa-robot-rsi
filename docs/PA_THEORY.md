@@ -70,6 +70,30 @@ tilt with a per-state β chosen so the constraint binds (`ppa/select.py:chi2_tru
 Prediction P5: with δ ≈ 1.3, the step of argmax-of-4, the trust-region rule at K = 64 beats argmax at
 K = 4, because the step is the same and coverage is better.
 
+**Corollary 5 (the right K depends on the context; added 2 Oct 2026, motivates FAS / P18).**
+Combine Lemma 1 with Lemma 2 for Gaussian-like scores at one context s (one goal):
+- certified gain ≈ σ̂(s)·sqrt(2 ln K) − ε(s)·sqrt(K/2), where σ̂ = sd_μ(Q̂) and ε = sd_μ(e);
+- setting the derivative in K to zero gives **K* ln K* ≈ 4·SNR(s)²**, where SNR(s) = σ̂(s)/ε(s).
+
+So the bound-optimal selection pressure grows roughly with the squared critic signal-to-noise ratio of the
+context.
+
+In the take-off task, SNR differs sharply across goal heights (M6):
+- On table goals almost every candidate succeeds. σ̂ is small relative to ε, so K* is small (K = 2–4 is best
+  at deployment; K = 64 loses 0.24).
+- On in-air goals only rare upward candidates make progress, and only K = 64 finds them.
+
+One global K, or a global δ, cannot serve both.
+
+ε(s) is not observable from the critic itself, and earlier attempts that proxied it by ensemble disagreement
+(LCB, χ² with a global β) did not win. Instead, FAS learns the per-context step directly from realised outcomes:
+- a bandit over K per goal-height bin;
+- rewarded by real success or progress;
+- discounted because the system changes each round.
+
+This is the robotics analogue of compute-optimal test-time scaling (Snell et al., 2024), where the best-of-N
+budget is allocated by estimated difficulty.
+
 ## 3. RSI-specific statements (to be proved or refuted)
 **Theorem 4 (sketch: monotone self-improvement).** Assume the critic of round r is fit on data from π_{r−1}
 and distillation is exact (μ_r = π_{r−1}). Then the error that Lemma 1 needs, sd_{μ_r}(e_r), is an
