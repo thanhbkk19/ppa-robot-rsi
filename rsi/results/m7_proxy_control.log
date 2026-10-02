@@ -1,0 +1,8 @@
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+seed | K  | succ | progress reward | final xy err | final lift | max lift
+0    |  2 | 0.00 | 0.276           | 0.055        | +0.023     | 0.026
+0    | 64 | 0.01 | 0.200           | 0.177        | -0.016     | 0.040
+1    |  2 | 0.00 | 0.278           | 0.051        | +0.018     | 0.021
+1    | 64 | 0.14 | 0.343           | 0.112        | +0.039     | 0.053
+2    |  2 | 0.01 | 0.342           | 0.054        | +0.034     | 0.043
+2    | 64 | 0.13 | 0.357           | 0.120        | +0.054     | 0.074

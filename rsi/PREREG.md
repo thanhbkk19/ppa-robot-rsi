@@ -398,3 +398,42 @@ goals need the large K.
 FAS does not use: K ∈ {4, 16} on the same replay base (with K = 64 = control, 3 configs). FAS counts as positive
 only if its J_full ≥ the best fixed K's J_full (tune seeds 0–2, round 10). The best fixed K, chosen on J_full,
 is also the second held-out comparator.
+
+## P18 verdict (seeds 0–2, round 10)
+| | J_target | J_easy | J_full |
+|---|---|---|---|
+| control (replay, K = 64) | 0.085 | 0.63 | 0.287 |
+| FAS (progress reward) | 0.000 | 0.96 | 0.257 |
+| criterion | ≥ 0.065 ✗ | ≥ 0.73 ✓ | ≥ 0.337 ✗ |
+
+**Fails.**
+- Easy goals are fully protected (+0.33), but the frontier is lost: J_target = 0 on every seed and every round.
+- The bandit chose K = 2 in most high bins (`fas_arm`).
+
+Mechanism (M7, `rsi/analysis_proxy.py`, control models, in-air goals, deployment only):
+
+| seed | K | success | progress reward | final xy err | max lift |
+|---|---|---|---|---|---|
+| 0 | 2 / 64 | 0.00 / 0.01 | 0.276 / 0.200 | 0.055 / 0.177 | 0.026 / 0.040 |
+| 1 | 2 / 64 | 0.00 / 0.14 | 0.278 / 0.343 | 0.051 / 0.112 | 0.021 / 0.053 |
+| 2 | 2 / 64 | 0.01 / 0.13 | 0.342 / 0.357 | 0.054 / 0.120 | 0.043 / 0.074 |
+
+- The distance-reduction proxy is dominated by xy placement.
+- K = 2 (close to the table-only demos) places accurately on the table and earns as much progress or more.
+- K = 64 is the arm that lifts and succeeds.
+- The bandit was gamed by its own proxy, the same failure as a gamed verifier.
+
+Lesson: the step-size controller must be rewarded by the target event itself. Where the target has never
+been observed, there is no evidence for a smaller step, and the coverage argument (1 − (1 − m)^K) says the
+default must be the large K.
+
+## P17 verdict (partial: B3 still running)
+| config | J_target | J_easy | J_full |
+|---|---|---|---|
+| B1 balanced | 0.110 | 0.53 | 0.260 |
+| B2 balanced + qgrad 0.1 | **0.190** | 0.437 | 0.300 |
+| G3 qgrad 0.1 (P16 attribution) | 0.147 | 0.367 | 0.240 |
+
+- B2 fails on J_easy (−0.19) and J_full (+0.013).
+- Balanced weighting does not protect easy goals; it slightly helps with qgrad (0.44 vs 0.37 J_easy,
+  0.19 vs 0.15 J_target).
