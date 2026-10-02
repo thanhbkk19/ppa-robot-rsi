@@ -279,3 +279,10 @@ Predictions (round 10, means over seeds 0–2, versus the base `rsi/results/fron
 
 Report the risk regardless of outcome: the gradient step is a larger selection step along a learned critic
 (the step-size law). Track opt0-style optimism, collapses and J_easy.
+
+## Verdicts: P14 held-out and P15
+| prediction | result | verdict |
+|---|---|---|
+| lr 3e-4 held-out: J_full ≥ +0.05 and J_target ≥ +0.05 | J_full −0.024, J_target +0.049 (lift +0.033, CI excludes 0) | fails (frontier up, easy goals forgotten) |
+| P15a qgrad: goal slope ≥ 2 × base | η = 0.1: +0.022 vs +0.010 | **holds** |
+| P15b qgrad: J_target ≥ +0.05 and J_easy ≥ −0.05 | η = 0.1: +0.032 / −0.15 | fails |
