@@ -11,6 +11,7 @@ import json
 import sys
 import time
 import itertools
+import copy
 import numpy as np
 import torch
 
@@ -24,7 +25,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -171,6 +172,13 @@ def run(cfg, out=None):
             opt0 = float(critic(np.c_[S[:, 0], A[:, 0]]).mean() - Y.mean())
         _, _, Yg, _ = episodes(gen, envs, eval_seeds, 1, select_fn(c, critic, rng), rng, h_range=c["eval_h"])
         d = {k: v for k, v in d.items() if not isinstance(v, np.ndarray)}
+        if c["extra_evals"]:
+            for tag, hr in (("J_easy", [0.0, 0.05]), ("J_full", [0.0, 0.3])):
+                _, _, Ye, de = episodes(gen, envs, eval_seeds[:100], c["K"], prime(select_fn(c, critic, rng)), rng,
+                                        h_range=hr)
+                extra = dict(extra, **{tag: float(Ye.mean())})
+                if tag == "J_full":
+                    extra["eval_lift_p95"] = float(np.quantile(de["final_obj"][:, 2] - 0.4247, 0.95))
         if c["eval_h"] is not None:   # where the evaluation objects end up (lift above the table, 95th pct)
             extra = dict(extra)
         hist.append(dict(round=rnd, J_sys=float(Y.mean()), J_gen=float(Yg.mean()), opt0=opt0,
@@ -262,13 +270,29 @@ def run(cfg, out=None):
             Sx, Ax = np.concatenate(DS), np.concatenate(DA)
         nm = int(c["rho"] * len(Sx)); i = rng.integers(0, len(Sd), nm)
         prev = [p.detach().clone() for p in gen.parameters()] if c["expo"] > 0 else None
+        old_state = copy.deepcopy(gen.state_dict()) if c["gate"] else None
         gen.fit(np.concatenate([Sx, Sd[i]]), np.concatenate([Ax, Ad[i]]), c["distill_steps"],
                 c["seed"] * 100 + r, lr=c["distill_lr"])
         if prev is not None:   # ExPO-style extrapolation along this round's update: theta += alpha (theta - theta_prev)
             with torch.no_grad():
                 for p, q0 in zip(gen.parameters(), prev):
                     p.add_(c["expo"] * (p - q0))
-        extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"],
+        gate_info = {}
+        if c["gate"]:
+            # paired acceptance test on fresh gate episodes (same initial states and goal heights 0-0.3 m for both
+            # generators, same refit critic): keep the new generator unless it is worse by more than gate_z s.e.
+            gs = [200_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_gate"])]
+            new_state = copy.deepcopy(gen.state_dict())
+            _, _, Yn, _ = episodes(gen, envs, gs, c["K"], prime(select_fn(c, critic, rng)), rng, h_range=[0.0, 0.3])
+            gen.load_state_dict(old_state)
+            _, _, Yo, _ = episodes(gen, envs, gs, c["K"], prime(select_fn(c, critic, rng)), rng, h_range=[0.0, 0.3])
+            dlt = Yn - Yo
+            se = dlt.std(ddof=1) / np.sqrt(len(dlt)) if dlt.std() > 0 else 0.0
+            accept = bool(dlt.mean() >= -c["gate_z"] * se)
+            if accept:
+                gen.load_state_dict(new_state)
+            gate_info = dict(gate_accept=accept, gate_new=float(Yn.mean()), gate_old=float(Yo.mean()))
+        extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"], **gate_info,
                      max_lift=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95)),
                      curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None, round_bins=round_bins,
                      train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"])

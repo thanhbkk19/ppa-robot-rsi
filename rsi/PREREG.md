@@ -196,3 +196,24 @@ Mechanism to report: per-height success bins over rounds (frontier speed), table
 | P11a CFG (w ≥ 2) takes off | 0 target success; lift ≤ 2.5 cm at every w | fails (M1: the CFG density ratio points down) |
 | P11b best CFG ≥ argmax K = 64 (filtered init) | 0.000 vs 0.018 | fails |
 | P12 ExPO speeds up the frontier | α = 0.5: r5 −0.017, r10 +0.018; α = 1.0 unstable | fails (amplifies a low-SNR update) |
+
+## Amendment H (written before any stability run): replay and acceptance gate (P13)
+Base: argmax K = 64, filtered-BC init, curriculum + HER, take-off regime, 10 rounds, seeds 0–2. Problems
+measured on this base (P12 control): the frontier oscillates (3 collapses > 3 cm between rounds), table goals
+are forgotten (cumulative 0.87 → 0.4–0.47), and goals above the frontier are out of distribution.
+
+Factors (2 × 2, every run uses the same new evaluation sets):
+- **replay** (`distill_data="replay"`): distil all rounds' executed chunks, not only the current round's.
+  Rationale: accumulate-vs-replace (Gerstgrasser et al. 2024) and continual-learning replay against forgetting.
+- **gate**: after distillation, run the new and the old generator (same refit critic) on the same 100 fresh
+  initial states with goals uniform on 0–0.3 m. Keep the new one unless mean(Y_new − Y_old) <
+  −1 · s.e. (paired). The episode budget is matched: gated runs use 200 training + 2 × 100 gate episodes per
+  round (= 400).
+
+New metrics: J_easy (goals 0–5 cm, 100 episodes), J_full (0–30 cm, 100 episodes), evaluation lift p95,
+per-round per-height training success, and the number of lift collapses.
+
+Predictions (3 seeds, means; control = no replay, no gate, rerun with the same code):
+- **P13a** replay: J_easy at round 10 ≥ control + 0.15, and lift collapses ≤ control.
+- **P13b** gate: lift collapses ≤ 1 in total, with mean final training lift ≥ control − 0.01.
+- **P13c** replay + gate: final J_full ≥ control + 0.05.
