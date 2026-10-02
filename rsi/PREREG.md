@@ -381,3 +381,15 @@ plus a paired 95% CI on J_full excluding 0.
 Mechanism to report:
 - the chosen arm per height bin over rounds (`fas_arm`): prediction 2 on low bins and 64 on high bins;
 - the training success per bin.
+
+M6 on tune seeds 0–2 (replay-control models, deployment only; recorded after P18 launched, before any P18 result):
+
+| seed | easy K = 1/2/4/64 | high K = 1/2/4/64 |
+|---|---|---|
+| 0 | 0.51 / 0.78 / 0.76 / 0.52 | 0.00 / 0.00 / 0.02 / 0.03 |
+| 1 | 0.77 / 0.88 / 0.89 / 0.58 | 0.00 / 0.01 / 0.02 / 0.16 |
+| 2 | 0.67 / 0.91 / 0.84 / 0.75 | 0.00 / 0.01 / 0.08 / 0.05 |
+| mean | 0.65 / **0.86** / 0.83 / 0.62 | 0.00 / 0.01 / 0.04 / **0.08** |
+
+The K-inversion on easy goals reproduces on all three tune seeds (+0.24 from K = 64 → 2, deployment only), and high
+goals need the large K.
