@@ -217,3 +217,14 @@ Predictions (3 seeds, means; control = no replay, no gate, rerun with the same c
 - **P13a** replay: J_easy at round 10 ≥ control + 0.15, and lift collapses ≤ control.
 - **P13b** gate: lift collapses ≤ 1 in total, with mean final training lift ≥ control − 0.01.
 - **P13c** replay + gate: final J_full ≥ control + 0.05.
+
+## Verdicts for P13 (tune seeds 0–2) — see rsi/results/P13_REPORT.md
+| prediction | result | verdict |
+|---|---|---|
+| P13a replay: J_easy ≥ control + 0.15, collapses ≤ control | 0.63 vs 0.44; 1 vs 2 | **holds** |
+| P13b gate: ≤ 1 collapse and lift ≥ control − 0.01 | 0 collapses; lift 0.083 vs 0.125 | fails |
+| P13c replay + gate: J_full ≥ control + 0.05 | 0.193 vs 0.180 | fails |
+
+**Held-out test (written before running it):** replay vs control on seeds 3–7, same configuration.
+Pass if the mean paired difference in J_easy at round 10 is ≥ +0.10 AND the mean paired difference in
+J_full at round 10 is ≥ +0.05.
