@@ -393,3 +393,8 @@ M6 on tune seeds 0–2 (replay-control models, deployment only; recorded after P
 
 The K-inversion on easy goals reproduces on all three tune seeds (+0.24 from K = 64 → 2, deployment only), and high
 goals need the large K.
+
+**P18b (fairness, added before any P18 result was read):** a fixed-K argmax baseline gets the tuning budget
+FAS does not use: K ∈ {4, 16} on the same replay base (with K = 64 = control, 3 configs). FAS counts as positive
+only if its J_full ≥ the best fixed K's J_full (tune seeds 0–2, round 10). The best fixed K, chosen on J_full,
+is also the second held-out comparator.
