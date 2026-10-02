@@ -228,3 +228,6 @@ Predictions (3 seeds, means; control = no replay, no gate, rerun with the same c
 **Held-out test (written before running it):** replay vs control on seeds 3–7, same configuration.
 Pass if the mean paired difference in J_easy at round 10 is ≥ +0.10 AND the mean paired difference in
 J_full at round 10 is ≥ +0.05.
+
+**Held-out result (seeds 3–7):** J_easy +0.330 [0.086, 0.574], J_full +0.200 [0.045, 0.355] → **passes**.
+J_target +0.105 [−0.020, 0.230] (not a criterion).

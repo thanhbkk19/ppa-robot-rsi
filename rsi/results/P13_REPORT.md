@@ -42,3 +42,21 @@ the measurement:
 
 Next by protocol: held-out seeds 3–7 for replay vs control (the first hypothesis of this study that holds on
 tune seeds).
+
+## Held-out test (seeds 3–7, pre-registered): **passes**
+| | lift r10 | eval lift p95 | collapses | J_easy r0 → r10 | J_full r10 | J_target r10 |
+|---|---|---|---|---|---|---|
+| control | 0.120 | 0.189 | 1 | 0.91 → 0.37 | 0.168 | 0.069 |
+| replay | 0.119 | 0.140 | 0 | 0.91 → 0.70 | **0.368** | **0.174** |
+
+Paired difference, replay − control (5 seeds, 95% t-interval):
+- J_easy +0.330 [+0.086, +0.574]; per seed 0.44 / 0.34 / 0.01 / 0.33 / 0.53;
+- J_full +0.200 [+0.045, +0.355]; per seed 0.16 / 0.07 / 0.12 / 0.38 / 0.27;
+- J_target (0.10–0.30 m) +0.105 [−0.020, +0.230]: positive on 4 of 5 seeds, but the interval includes 0.
+
+Pass criterion (J_easy ≥ +0.10 and J_full ≥ +0.05): **met**, both intervals exclude 0.
+
+The held-out effect is larger than on the tune seeds (+0.20 vs +0.107 on J_full). The training lift is about
+the same with and without replay (0.119 vs 0.120). Replay does not push the frontier faster; it keeps what
+was learned, so success spreads over the whole range below the frontier. This matches the paired gate
+statistic: round-only updates regress the full range.
