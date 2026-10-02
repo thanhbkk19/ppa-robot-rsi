@@ -630,3 +630,15 @@ Findings:
 - The K-inversion is still present, and now on high goals too (seed 0: K = 64 0.22 vs K = 2 0.66). This
   leaves room for per-goal selection pressure on top. That is a separate test (P21), to be pre-registered
   before it is run.
+
+## P19 held-out verdict (F3, seeds 5–9, paired against the replay control = best fixed K)
+| metric | F3 | control | paired diff | 95% CI | per-seed diffs |
+|---|---|---|---|---|---|
+| J_target | 0.309 | 0.224 | +0.085 | [−0.005, +0.175] | +0.00 +0.08 +0.20 +0.07 +0.07 |
+| J_easy | 0.826 | 0.688 | +0.138 | [−0.034, +0.310] | +0.20 +0.21 +0.20 +0.19 −0.11 |
+| J_full | 0.450 | 0.378 | +0.072 | [−0.022, +0.166] | −0.03 +0.07 +0.15 +0.14 +0.03 |
+
+**Not confirmed under the strict pre-registered rule.**
+- The three point criteria hold: J_easy +0.138 ≥ 0.10, J_target +0.085 ≥ −0.02, J_full +0.072 ≥ 0.05.
+- The paired 95% CI on J_full includes 0.
+- Directionally consistent: J_full is positive on 4 of 5 seeds and J_target is ≥ 0 on all 5.
