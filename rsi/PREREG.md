@@ -642,3 +642,31 @@ Findings:
 - The three point criteria hold: J_easy +0.138 ≥ 0.10, J_target +0.085 ≥ −0.02, J_full +0.072 ≥ 0.05.
 - The paired 95% CI on J_full includes 0.
 - Directionally consistent: J_full is positive on 4 of 5 seeds and J_target is ≥ 0 on all 5.
+
+## P20 held-out verdict (D2, seeds 5–9) — **CONFIRMED**
+Against the replay control (= best fixed K) on the same seeds:
+
+| metric | D2 | control | paired diff | 95% CI | per-seed diffs |
+|---|---|---|---|---|---|
+| J_target | 0.450 | 0.224 | **+0.226** | [+0.021, +0.431] | +0.20 −0.05 +0.34 +0.35 +0.29 |
+| J_easy | 0.840 | 0.688 | **+0.152** | [+0.066, +0.238] | +0.17 +0.19 +0.05 +0.23 +0.12 |
+| J_full | 0.594 | 0.378 | **+0.216** | [+0.090, +0.342] | +0.22 +0.07 +0.19 +0.35 +0.25 |
+
+All three pre-registered criteria hold (J_full ≥ +0.05, J_target ≥ +0.03, J_easy ≥ −0.05), and every paired
+95% CI excludes 0.
+
+Against B3 (the identical loop without the outcome filter), on the same seeds:
+
+| metric | D2 | B3 | paired diff | 95% CI | per-seed diffs |
+|---|---|---|---|---|---|
+| J_target | 0.450 | 0.347 | +0.103 | [−0.172, +0.378] | +0.00 −0.21 +0.38 +0.19 +0.16 |
+| J_easy | 0.840 | 0.736 | +0.104 | [+0.002, +0.206] | +0.23 +0.10 +0.10 +0.00 +0.09 |
+| J_full | 0.594 | 0.492 | +0.102 | [−0.022, +0.226] | +0.06 +0.04 +0.28 +0.07 +0.06 |
+
+- The filter's own contribution is positive on J_full for 5/5 seeds; its CI is only significant for J_easy.
+- The held-out gain is smaller than on tune seeds (J_full +0.22 vs +0.34), as expected from selection on
+  tune seeds.
+
+Attribution for FAS (extra, not a verdict): F3 vs B2 on seeds 5–9 gives J_easy +0.228 [+0.121, +0.335],
+J_target +0.059 [−0.164, +0.282], J_full +0.070 [−0.098, +0.238]. The easy-goal protection of the per-goal
+step size is reliable; its frontier effect is not.
