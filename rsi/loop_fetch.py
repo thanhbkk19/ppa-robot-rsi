@@ -25,7 +25,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, fas=False, fas_arms=(2, 64), fas_gamma=0.7, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -74,7 +74,11 @@ def select_fn(c, critic, rng):
         X = np.concatenate([np.repeat(S[:, None], K, 1), C], -1)
         q = critic(X)
         qm = q.mean(0)
-        if rule == "argmax":
+        if rule == "argmax" and getattr(sel, "k_cur", None) is not None:
+            # frontier-adaptive selection: episode e uses argmax over a random subset of k_cur[e] candidates
+            keep = rng.random((n, K)).argsort(1) < sel.k_cur[:, None]
+            j = np.where(keep, qm, -np.inf).argmax(1)
+        elif rule == "argmax":
             j = qm.argmax(1)
         elif rule == "lcb":
             j = (qm - c["kappa"] * q.std(0)).argmax(1)
@@ -107,6 +111,7 @@ def select_fn(c, critic, rng):
     sel.chi2 = []
     sel.moved = []
     sel.m_cur, sel.m_global, sel.m_of_h = None, 0.5, None
+    sel.k_cur, sel.k_of_h = None, None
     return sel
 
 
@@ -141,12 +146,15 @@ def heights_for(seeds, rng_h):
 def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None, heights=None):
     """Run len(seeds) episodes (batches of envs.n). Returns S (n, NDEC, s), A (n, NDEC, a), Y (n,), diag.
     keep_cands: diag["C"] holds every candidate set (n, NDEC, K, a) for Rao-Blackwellised distillation."""
-    S_all, A_all, Y_all, spread, ens_sd, C_all, F_all = [], [], [], [], [], [], []
+    S_all, A_all, Y_all, spread, ens_sd, C_all, F_all, K_used = [], [], [], [], [], [], [], []
     hs = heights_for(seeds, h_range) if heights is None else np.asarray(heights)
     for b in range(0, len(seeds), envs.n):
         o = envs.reset(seeds[b:b + envs.n], None if hs is None else hs[b:b + envs.n])
         if getattr(sel, "m_of_h", None) is not None and hs is not None:
             sel.m_cur = sel.m_of_h(hs[b:b + envs.n])
+        if getattr(sel, "k_of_h", None) is not None and hs is not None:
+            sel.k_cur = sel.k_of_h(hs[b:b + envs.n])
+            K_used.append(sel.k_cur.copy())
         S_ep, A_ep, C_ep = [], [], []
         for t in range(NDEC):
             S = np.c_[o, np.full(envs.n, t / NDEC)].astype(np.float32)
@@ -168,6 +176,8 @@ def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None, heig
     if keep_cands:
         d["C"] = np.concatenate(C_all)
     d["final_obj"] = np.concatenate(F_all)
+    if K_used:
+        d["k_used"] = np.concatenate(K_used)
     if hs is not None:
         d["heights"] = np.asarray(hs, float)
     return np.concatenate(S_all), np.concatenate(A_all), np.concatenate(Y_all), d
@@ -218,9 +228,23 @@ def run(cfg, out=None):
         b = np.clip(np.searchsorted(edges, h, side="right") - 1, 0, nb - 1)
         return succ_n[b] / tot_n[b]
 
-    def prime(sel):   # give the selection rule predictable success estimates (past training rounds only)
+    arms = np.array(c["fas_arms"])
+    fas_s, fas_n = np.ones((nb, len(arms))), np.full((nb, len(arms)), 2.0)    # Beta(1, 1) per (height bin, arm)
+
+    def k_thompson(h):   # training: Thompson sampling over the arms, per goal-height bin
+        b = np.clip(np.searchsorted(edges, h, side="right") - 1, 0, nb - 1)
+        draw = rng.beta(fas_s[b], fas_n[b] - fas_s[b])
+        return arms[draw.argmax(1)]
+
+    def k_greedy(h):     # deployment: the arm with the higher posterior mean, per goal-height bin
+        b = np.clip(np.searchsorted(edges, h, side="right") - 1, 0, nb - 1)
+        return arms[(fas_s[b] / fas_n[b]).argmax(1)]
+
+    def prime(sel, train=False):   # give the selection rule predictable estimates (past training rounds only)
         sel.m_global = m_last[0]
         sel.m_of_h = m_of_h if edges is not None else None
+        if c["fas"] and edges is not None:
+            sel.k_of_h = k_thompson if train else k_greedy
         return sel
 
     def curriculum_heights(n):
@@ -232,7 +256,7 @@ def run(cfg, out=None):
     evaluate(0, {})
     for r in range(1, c["rounds"] + 1):
         seeds = [100_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_train"])]
-        sel = prime(select_fn(c, critic, rng))
+        sel = prime(select_fn(c, critic, rng), train=True)
         hts = curriculum_heights(len(seeds)) if c["curriculum"] else None
         S, A, Y, d = episodes(gen, envs, seeds, c["K"], sel, rng, keep_cands=c["rb"], h_range=c["train_h"],
                               heights=hts)
@@ -243,6 +267,19 @@ def run(cfg, out=None):
             cnt = np.bincount(bi, minlength=nb); sc = np.bincount(bi, weights=Y, minlength=nb)
             round_bins = [round(float(a / b), 3) if b > 0 else None for a, b in zip(sc, cnt)]   # this round only
         m_last[0] = float(Y.mean())
+        if c["fas"] and "k_used" in d and critic.trained:
+            # bandit reward in [0, 1]: success, or else the fraction of the initial object-goal distance removed
+            # (Bernoulli trick for [0, 1] rewards, Agrawal & Goyal 2012), so arms are distinguishable beyond the frontier
+            d0 = np.linalg.norm(S[:, 0, 25:28] - S[:, 0, 3:6], axis=1)
+            d1 = np.linalg.norm(S[:, 0, 25:28] - d["final_obj"], axis=1)
+            prog = np.clip(1 - d1 / np.maximum(d0, 1e-6), 0, 1)
+            rew = (rng.random(len(Y)) < np.maximum(Y, prog)).astype(float)
+            bi = np.clip(np.searchsorted(edges, d["heights"], side="right") - 1, 0, nb - 1)
+            ai = np.searchsorted(arms, d["k_used"])
+            # discounted Thompson sampling (the generator and critic change every round): shrink past evidence
+            # towards the Beta(1, 1) prior by fas_gamma before adding this round's outcomes
+            fas_s[:] = 1 + c["fas_gamma"] * (fas_s - 1); fas_n[:] = 2 + c["fas_gamma"] * (fas_n - 2)
+            np.add.at(fas_s, (bi, ai), rew); np.add.at(fas_n, (bi, ai), 1.0)
         if c["her"]:
             # hindsight (final-state) relabelling: the achieved object position becomes the goal, and the episode
             # is a success for it. Appended to the critic replay and to the distillation data (GCSL-style).
@@ -327,6 +364,7 @@ def run(cfg, out=None):
         extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"], **gate_info,
                      max_lift=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95)),
                      curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None, round_bins=round_bins,
+                     fas_arm=[int(a) for a in arms[(fas_s / fas_n).argmax(1)]] if c["fas"] else None,
                      train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"], moved_frac=d.get("moved_frac"))
         if r in c.get("probe", []):
             from rsi.probe import probe

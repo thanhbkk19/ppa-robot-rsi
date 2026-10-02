@@ -340,3 +340,44 @@ Control: the stability replay runs (J_target 0.085, J_easy 0.63, J_full 0.287).
 
 **P17:** the better of B2/B3 has J_target ≥ control + 0.08 AND J_easy ≥ control − 0.05 AND J_full ≥ control + 0.05.
 If it holds → held-out seeds 3–7 with the same three criteria, paired against `stability_heldout` replay.
+
+## Amendment M (written before any FAS run): frontier-adaptive selection pressure (P18)
+Diagnosis (M6, `rsi/analysis_kgoal.py`, deployment-only evaluation of saved replay-control models):
+- Easy goals (0–5 cm) show the K-inversion at deployment:
+  seed 3 K = 1/2/4/64 → 0.79/0.92/0.93/0.84; seed 4 → 0.65/0.81/0.78/0.50.
+- High goals (10–30 cm) reach non-zero success only at K = 64 (seed 3: 0.15).
+- Disclosure: these two models are held-out-seed models (seeds 3, 4). They were used for a mechanism
+  diagnosis, not for choosing a config. To keep the held-out test clean, the P18 held-out set is **seeds 5–9**
+  (controls for seeds 8, 9 are run fresh). The same diagnosis is rerun on tune seeds 0–2
+  (`rsi/results/m6_kgoal_tune.log`) for the record.
+
+Reading: the right amount of selection pressure depends on the goal.
+- Lemma 2: χ²(argmax-of-K ‖ generator) = (K−1)²/(2K−1). Lemma 1: the exploitation of critic error grows with
+  √χ² · sd(e). So K sets the step size.
+- Where the generator already succeeds (easy goals), the possible improvement is small and large K mostly buys
+  critic exploitation.
+- Where it never succeeds (high goals), only a large step reaches the rare upward candidates.
+- This is the robotics analogue of compute-optimal test-time scaling (Snell et al. 2024): allocate
+  best-of-N pressure per difficulty bin, with difficulty estimated from the model's own outcomes rather than
+  fixed.
+
+Method (`fas=True`):
+- For each 2.5 cm goal-height bin, a Thompson-sampling bandit over arms K ∈ {2, 64}.
+  - Arm K selects the critic argmax over a random subset of size K of the 64 sampled candidates.
+- Bandit reward: max(success, fraction of the initial object–goal distance removed) ∈ [0, 1], made Bernoulli by
+  the Agrawal–Goyal trick, so arms stay distinguishable where success is 0.
+- Discount γ = 0.7 per round (the system changes every round). No updates while the critic is untrained.
+- Training episodes draw arms by Thompson sampling. Evaluation uses the arm with the higher posterior mean.
+- Everything else is the held-out-confirmed replay base: argmax over 64 samples, distil lr 3e-5, filtered init,
+  curriculum + HER, 10 rounds.
+- Tuning budget: 1 config (arms, γ and the reward fixed here, before any run).
+
+Control: stability replay (seeds 0–2): J_target 0.085, J_easy 0.63, J_full 0.287.
+
+**P18:** FAS at round 10, mean of seeds 0–2: J_easy ≥ control + 0.10 AND J_target ≥ control − 0.02 AND
+J_full ≥ control + 0.05.
+If it holds → held-out seeds 5–9, paired against replay control on the same seeds; the same three criteria,
+plus a paired 95% CI on J_full excluding 0.
+Mechanism to report:
+- the chosen arm per height bin over rounds (`fas_arm`): prediction 2 on low bins and 64 on high bins;
+- the training success per bin.
