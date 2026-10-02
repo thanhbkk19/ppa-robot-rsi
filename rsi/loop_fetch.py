@@ -25,7 +25,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -54,6 +54,22 @@ def select_fn(c, critic, rng):
         n = len(S)
         if K == 1 or not critic.trained:
             return np.zeros(n, int), None
+        if c["qgrad_eta"] > 0:
+            # directed exploration: move every candidate a step of length eta along the critic's action gradient
+            # (the DPG action-improvement step) and keep the moved version where the critic scores it higher.
+            # C is modified in place, so the executed chunk is the improved one.
+            Xt = torch.as_tensor(np.concatenate([np.repeat(S[:, None], K, 1), C], -1).reshape(-1, S.shape[1] + C.shape[2]),
+                                 dtype=torch.float32)
+            act = Xt[:, S.shape[1]:].clone().requires_grad_(True)
+            Q = torch.stack([net(torch.cat([Xt[:, :S.shape[1]], act], 1)).squeeze(-1) for net in critic.nets]).mean(0)
+            g, = torch.autograd.grad(Q.sum(), act)
+            g = g / g.norm(dim=1, keepdim=True).clamp_min(1e-8)
+            Cp = (act.detach() + c["qgrad_eta"] * g).clamp(-1, 1).numpy().reshape(C.shape)
+            qa = critic(np.concatenate([np.repeat(S[:, None], K, 1), C], -1)).mean(0)
+            qb = critic(np.concatenate([np.repeat(S[:, None], K, 1), Cp], -1)).mean(0)
+            better = qb > qa
+            C[better] = Cp[better]
+            sel.moved.append(float(better.mean()))
         X = np.concatenate([np.repeat(S[:, None], K, 1), C], -1)
         q = critic(X)
         qm = q.mean(0)
@@ -88,6 +104,7 @@ def select_fn(c, critic, rng):
             raise ValueError(rule)
         return j, q
     sel.chi2 = []
+    sel.moved = []
     sel.m_cur, sel.m_global, sel.m_of_h = None, 0.5, None
     return sel
 
@@ -235,6 +252,7 @@ def run(cfg, out=None):
             if c["boot"]:
                 RW.append(np.repeat(rng.poisson(1.0, (len(Y), c["n_ens"])), NDEC, 0))
         d["sel_chi2"] = float(np.mean(sel.chi2)) if sel.chi2 else float("nan")
+        d["moved_frac"] = float(np.mean(sel.moved)) if sel.moved else float("nan")
         X3 = np.concatenate([S, A], -1)                                   # (n, NDEC, s + a)
         RX.append(X3.reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.repeat(Y, NDEC))
         if c["boot"]:   # per-episode bootstrap weights (drawn only here, so other runs keep their random stream)
@@ -296,7 +314,7 @@ def run(cfg, out=None):
         extra = dict(train_J=float(Y.mean()), critic_loss=closs, train_spread=d["q_spread"], **gate_info,
                      max_lift=float(np.quantile(d["final_obj"][:, 2] - 0.4247, 0.95)),
                      curr_m=(succ_n / tot_n).round(3).tolist() if c["curriculum"] else None, round_bins=round_bins,
-                     train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"])
+                     train_ens_sd=d["q_ens_sd"], sel_chi2=d["sel_chi2"], moved_frac=d.get("moved_frac"))
         if r in c.get("probe", []):
             from rsi.probe import probe
             extra["probe"] = probe(gen, critic, select_fn(c, critic, rng), c["K"], c["seed"] * 100 + r, rng=rng)

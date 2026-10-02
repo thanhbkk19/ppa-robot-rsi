@@ -261,3 +261,21 @@ final models.
 base, held-out seeds 3–7. The control reuses `rsi/results/stability_heldout` (replay, lr 3e-5, same
 configuration and seeds). Pass if the mean paired difference in J_full ≥ +0.05 AND in J_target ≥ +0.05 at
 round 10.
+
+## Amendment J (written before any qgrad run): directed exploration along the critic's action gradient (P15)
+Motivation (P14): isotropic widening breaks the grasp, and the generator stays goal-blind. Method
+(`qgrad_eta`):
+- Every candidate is moved one step of L2 length η along ∇_a Q̂(s, a). This is the DPG action-improvement
+  step (Silver et al. 2014), i.e. classifier/value guidance applied to the samples.
+- The moved version is executed where the critic scores it higher, then argmax over K = 64 as before.
+- Exploration then widens only along the direction the goal-aware critic prefers. Distilling the moved
+  chunks gives goal-dependent targets.
+
+Base: the P14 best configuration (replay, distil lr 3e-4, argmax K = 64, filtered init, curriculum + HER,
+10 rounds, seeds 0–2). Tuning budget: η ∈ {0.1, 0.3}.
+Predictions (round 10, means over seeds 0–2, versus the base `rsi/results/frontier_p14` lr 3e-4 τ = 1):
+- **P15a** (mechanism): the generator goal slope (M5) is ≥ 2 × the base (base +0.010).
+- **P15b** (outcome): J_target ≥ base + 0.05 and J_easy ≥ base − 0.05, for the better η.
+
+Report the risk regardless of outcome: the gradient step is a larger selection step along a learned critic
+(the step-size law). Track opt0-style optimism, collapses and J_easy.
