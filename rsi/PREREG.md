@@ -551,3 +551,31 @@ Predictions:
 - The frontier gain is not reliable: seed 3 never takes off.
 - The control is much stronger on held-out seeds (J_target 0.174) than on tune seeds (0.085), so tune-seed
   margins over the control are optimistic.
+
+## P19 verdict (tune seeds 0–2, round 10)
+| config | J_target | J_easy | J_full |
+|---|---|---|---|
+| control (= best fixed K) | 0.085 | 0.63 | 0.287 |
+| B2 balanced + qgrad (no FAS, P17) | 0.190 | 0.437 | 0.300 |
+| F2 FAS v2 | 0.058 | 0.883 | 0.257 |
+| **F3 FAS v2 + balanced + qgrad** | **0.253** | **0.807** | **0.367** |
+| criterion (P18 + P18b) | ≥ 0.065 | ≥ 0.73 | ≥ 0.337 and ≥ 0.287 |
+
+**F3 holds on tune seeds** (selected over F2 on J_full).
+- Paired per-seed diffs vs control:
+  - J_target +0.18 / +0.03 / +0.30;
+  - J_easy +0.28 / +0.20 / +0.05;
+  - J_full +0.15 / −0.03 / +0.12.
+- Attribution vs B2 (the same loop without FAS): J_easy +0.37, J_target +0.06, J_full +0.07.
+  The frontier push (qgrad + balancing) and the per-goal step-size controller are complementary.
+- Mechanism: arms K = 2 on bins below 7.5–10 cm and K = 64 above (`fas_arm`), as predicted.
+
+Held-out as pre-registered: seeds 5–9, paired against the replay control (= best fixed K) on the same seeds;
+criteria J_easy ≥ +0.10, J_target ≥ −0.02, J_full ≥ +0.05, and the paired 95% CI on J_full excluding 0.
+Extra (not part of the verdict, for attribution): B2 on seeds 5–9.
+
+## P20 interim
+- D1 (outcome-consistent distillation, control base), final: 0.097 / 0.68 / 0.263.
+- Mechanism prediction holds: goal slope +0.034 / +0.025 / +0.020 (mean 0.026 vs control 0.011, ≥ 0.022 ✓).
+  Generator up at h = 0 is about equal to control (−0.007 vs −0.005).
+- Outcome not yet improved. D2 still running.
