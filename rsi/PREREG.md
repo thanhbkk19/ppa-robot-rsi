@@ -487,3 +487,33 @@ Predictions:
 - Per seed (J_target / J_easy / J_full): 0.19/0.54/0.35, 0.03/0.47/0.24, 0.345/0.77/0.48. High variance.
 - The same lr without balancing (P14 held-out) failed through easy-goal forgetting; balancing is the change.
 - As pre-registered: held-out seeds 3–7 with the same three criteria, paired against `stability_heldout` replay.
+
+## Amendment O (written before any outcome-consistent run): outcome-consistent distillation (P20)
+Diagnosis (M8 goal slope ≈ 0 in every config, plus reading the distillation code):
+- The distillation set contains the critic-selected actions of *every* training episode under the commanded
+  goal, plus (HER) the same actions under the achieved goal.
+- In-air bins have 0–55% (mostly ≤ 20%) training success at round 10 (`round_bins`). So most in-air
+  commanded rows are action sequences that ended with the object on the table, and they also appear as HER
+  rows labelled with the table goal.
+- Identical actions labelled with two different goal heights teach the generator to ignore the goal height.
+- With a goal-blind generator, lifting learned at the frontier leaks to table goals (B3: generator up at h = 0 is
+  +0.03, the same as at h = 0.2). This is the frontier ↔ easy-goal coupling seen in P14, P15, P17 and P18/19.
+
+Method (`distill_filter="success"`):
+- Commanded-goal rows only from successful episodes, as in outcome-filtered self-training (STaR, ReST, RAFT).
+- HER rows from every episode (GCSL).
+- Every distilled row then pairs an action sequence with a goal it actually achieved. The critic still uses all
+  data, and selection is unchanged.
+
+Configurations (tune seeds 0–2, tuning budget 2):
+- D1: control replay base + filter.
+- D2: B3 base (balanced, distil lr 3e-4) + filter.
+
+Predictions:
+- Mechanism (M8 probe): D1 generator goal slope ≥ 0.022 (2× control +0.011), and generator mean up at h = 0
+  ≤ control's.
+- **P20 (pass/fail):** the better of D1/D2 on J_full (round 10, mean of seeds 0–2), against the control
+  (0.085 / 0.63 / 0.287):
+  - J_full ≥ control + 0.05 AND J_target ≥ control + 0.03 AND J_easy ≥ control − 0.05.
+  - In words: both ends move up, with no trade-off.
+- If it passes → held-out seeds 5–9 against the control and B3 on the same seeds.
