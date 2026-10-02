@@ -6,6 +6,7 @@
 - Demos come from a noisy scripted controller; the pretrained diffusion policy is fit on them by BC.
 """
 from __future__ import annotations
+import os
 import numpy as np
 import gymnasium as gym
 import gymnasium_robotics
@@ -13,7 +14,17 @@ import gymnasium_robotics
 gym.register_envs(gymnasium_robotics)
 H, STEPS = 4, 50
 NDEC = (STEPS + H - 1) // H
-OBS_DIM = 25 + 3 + 1          # observation, desired goal, t / NDEC
+# RSI_GOALREL=1 appends the goal relative to the object (desired - achieved goal), a translation-invariant goal
+# feature: "move the object toward the goal" is then the same function at every goal height.
+GOALREL = os.environ.get("RSI_GOALREL") == "1"
+OBS_DIM = 25 + 3 + (3 if GOALREL else 0) + 1     # observation, desired goal, [goal - object], t / NDEC
+
+
+def obs_vec(o):
+    v = [o["observation"], o["desired_goal"]]
+    if GOALREL:
+        v.append(o["desired_goal"] - o["achieved_goal"])
+    return np.concatenate(v)
 ACT_DIM = 4 * H
 
 
@@ -33,7 +44,7 @@ class Envs:
                 u = e.unwrapped
                 u.goal = u.goal.copy(); u.goal[2] = obs[i]["achieved_goal"][2] + float(h)
                 obs[i] = u._get_obs()
-        return np.stack([np.r_[o["observation"], o["desired_goal"]] for o in obs]).astype(np.float32)
+        return np.stack([obs_vec(o) for o in obs]).astype(np.float32)
 
     def get_state(self, i):
         import mujoco
@@ -49,7 +60,7 @@ class Envs:
         u.goal = state[1].copy()
         mujoco.mj_forward(u.model, u.data)
         o = u._get_obs()
-        return np.r_[o["observation"], o["desired_goal"]].astype(np.float32)
+        return obs_vec(o).astype(np.float32)
 
     def step_chunk(self, chunk, n_steps):
         """chunk (n, H*4) -> executes the first n_steps low-level actions. Returns obs, success flags."""
@@ -58,7 +69,7 @@ class Envs:
         for i, e in enumerate(self.envs):
             for h in range(n_steps):
                 o, _, _, _, info = e.step(np.clip(a[i, h], -1, 1))
-            out.append(np.r_[o["observation"], o["desired_goal"]]); succ.append(info["is_success"])
+            out.append(obs_vec(o)); succ.append(info["is_success"])
         return np.stack(out).astype(np.float32), np.array(succ, float)
 
 
@@ -104,7 +115,7 @@ def collect_demos(n_eps, noise, seed, n_envs=50, table_only=False):
                     nxt = []
                     for i, e in enumerate(E.envs):
                         oo, _, _, _, info = e.step(ch[i, h])
-                        nxt.append(np.r_[oo["observation"], oo["desired_goal"]])
+                        nxt.append(obs_vec(oo))
                     cur = np.stack(nxt).astype(np.float32)
             ep_S.append(np.c_[o, np.full(n_envs, t / NDEC)]); ep_A.append(ch.reshape(n_envs, -1))
             o = cur

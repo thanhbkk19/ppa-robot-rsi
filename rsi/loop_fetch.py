@@ -15,7 +15,7 @@ import copy
 import numpy as np
 import torch
 
-from rsi.fetch import Envs, NDEC, STEPS, H, OBS_DIM, ACT_DIM, collect_demos
+from rsi.fetch import Envs, NDEC, STEPS, H, OBS_DIM, ACT_DIM, collect_demos, GOALREL
 from rsi.models import Diffusion, Critic
 from rsi.loop_nav import chi2_weights
 
@@ -30,7 +30,8 @@ DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs
 
 def pretrained(c):
     os.makedirs(CACHE, exist_ok=True)
-    tag = ("" if c["demo_goals"] == "env" else f"_{c['demo_goals']}") + ("_filt" if c["demo_filter"] else "")
+    tag = ("" if c["demo_goals"] == "env" else f"_{c['demo_goals']}") + ("_filt" if c["demo_filter"] else "") \
+        + ("_goalrel" if GOALREL else "")
     f = os.path.join(CACHE, f"bc_n{c['n_demo']}_z{c['demo_noise']}{tag}_s{c['seed']}.pt")
     if os.path.exists(f):
         st = torch.load(f, weights_only=False)
@@ -174,6 +175,7 @@ def episodes(gen, envs, seeds, K, sel, rng, keep_cands=False, h_range=None, heig
 
 def run(cfg, out=None):
     c = dict(DEF); c.update(cfg)
+    assert bool(c.get("goalrel", False)) == GOALREL, "run goalrel configs with RSI_GOALREL=1 (and only those)"
     rng = np.random.default_rng(c["seed"]); torch.manual_seed(c["seed"])
     gen, Sd, Ad = pretrained(c)
     gen.temp = c["samp_temp"]
@@ -245,6 +247,8 @@ def run(cfg, out=None):
             # hindsight (final-state) relabelling: the achieved object position becomes the goal, and the episode
             # is a success for it. Appended to the critic replay and to the distillation data (GCSL-style).
             S_h = S.copy(); S_h[:, :, 25:28] = d["final_obj"][:, None, :]
+            if GOALREL:   # keep the goal-relative feature consistent with the relabelled goal
+                S_h[:, :, 28:31] = d["final_obj"][:, None, :] - S[:, :, 3:6]
             X3h = np.concatenate([S_h, A], -1)
             RX.append(X3h.reshape(-1, OBS_DIM + ACT_DIM)); RY.append(np.ones(len(Y) * NDEC))
             RXn.append(np.concatenate([X3h[:, 1:], X3h[:, -1:]], 1).reshape(-1, OBS_DIM + ACT_DIM))

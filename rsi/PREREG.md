@@ -286,3 +286,27 @@ Report the risk regardless of outcome: the gradient step is a larger selection s
 | lr 3e-4 held-out: J_full ≥ +0.05 and J_target ≥ +0.05 | J_full −0.024, J_target +0.049 (lift +0.033, CI excludes 0) | fails (frontier up, easy goals forgotten) |
 | P15a qgrad: goal slope ≥ 2 × base | η = 0.1: +0.022 vs +0.010 | **holds** |
 | P15b qgrad: J_target ≥ +0.05 and J_easy ≥ −0.05 | η = 0.1: +0.032 / −0.15 | fails |
+
+## Amendment K (written before any goal-relative run): break the goal coupling (P16)
+Diagnosis (P13–P15): every intervention that raises the frontier also costs easy-goal success. A single
+generator with weak goal dependence shifts its vertical behaviour at every goal height together.
+
+Method:
+- Add the goal relative to the object (desired − achieved goal, 3 dims) to the inputs of the generator and
+  the critic (`RSI_GOALREL=1`).
+- "Move the object toward the goal" then has the same form at every height (translation invariance in z),
+  so goal-dependent behaviour should be easier to represent and less likely to interfere across heights.
+- Combined with the critic-gradient step η = 0.1, the only intervention shown to induce goal dependence (P15a).
+
+Base: the held-out-confirmed configuration (replay, distil lr 3e-5, argmax K = 64, filtered init,
+curriculum + HER, 10 rounds), seeds 0–2. Control = `rsi/results/stability` replay runs:
+J_easy 0.63, J_full 0.287, J_target 0.085.
+Runs:
+- G1 goal-relative;
+- G2 goal-relative + qgrad η = 0.1;
+- G3 qgrad η = 0.1 without goal-relative (attribution).
+
+**P16:** G2 J_target ≥ control + 0.08 AND J_easy ≥ control − 0.05 (round 10, mean of 3 seeds).
+Mechanism to report: the M5 goal slope and the generator's mean up at h = 0 (the leakage to table goals),
+per config.
+If P16 holds on tune seeds → held-out on seeds 3–7 with the same criterion, paired against control.
