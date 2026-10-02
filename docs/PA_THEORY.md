@@ -94,6 +94,33 @@ One global K, or a global δ, cannot serve both.
 This is the robotics analogue of compute-optimal test-time scaling (Snell et al., 2024), where the best-of-N
 budget is allocated by estimated difficulty.
 
+**Proposition 6 (label contradiction makes the distilled generator goal-blind; added 2 Oct 2026, P20).**
+Setting: the distillation set D mixes two kinds of rows.
+- (a) Commanded rows (s, g_cmd, a), where a is the selected action.
+- (b) Hindsight rows (s, g_ach, a), where g_ach is the goal the episode actually reached.
+
+Diffusion training fits the conditional p_D(a | s, g). Split the episodes with commanded goal g by outcome:
+- a success fraction m(g), in which g_ach ≈ g;
+- a failure fraction 1 − m(g), whose actions reach some other goal g' (in take-off, mostly the table).
+
+Then, for an in-air g,
+
+  p_D(a | s, g) ∝ m(g) · p(a | s, success at g) + (1 − m(g)) · p(a | s, fail at g),
+
+while the same failure actions also appear under g' through (b). As m(g) → 0, the conditional at g approaches
+the conditional at the table goal g'. The goal information carried by the data, I(A; G | S), shrinks with the
+frontier success rate. The fitted generator is goal-blind exactly where the frontier is: M8 measures a slope of
+≈ 0.01. Any lifting it learns from the m(g) successes is then shared with table goals (the coupling).
+
+Keeping commanded rows only when the outcome matches (Y = 1) makes every row an instance of "a reaches g":
+- This is the GCSL data condition (Ghosh et al. 2019), under which supervised learning on relabelled data
+  optimises a lower bound on goal-reaching performance.
+- It is the outcome filter of STaR, ReST and RAFT in LLM self-training.
+- The critic still uses all rows, so selection keeps its improvement signal.
+
+Measured: goal slope 0.011 → 0.141, and the generator alone reaches 0.47 on in-air goals (from 0.00).
+Larger distillation steps then stop leaking (the D2 result); see `rsi/PREREG.md` P20.
+
 ## 3. RSI-specific statements (to be proved or refuted)
 **Theorem 4 (sketch: monotone self-improvement).** Assume the critic of round r is fit on data from π_{r−1}
 and distillation is exact (μ_r = π_{r−1}). Then the error that Lemma 1 needs, sd_{μ_r}(e_r), is an
