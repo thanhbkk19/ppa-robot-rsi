@@ -579,3 +579,28 @@ Extra (not part of the verdict, for attribution): B2 on seeds 5–9.
 - Mechanism prediction holds: goal slope +0.034 / +0.025 / +0.020 (mean 0.026 vs control 0.011, ≥ 0.022 ✓).
   Generator up at h = 0 is about equal to control (−0.007 vs −0.005).
 - Outcome not yet improved. D2 still running.
+
+## P20 verdict (tune seeds 0–2, round 10)
+| config | J_target | J_easy | J_full |
+|---|---|---|---|
+| control | 0.085 | 0.630 | 0.287 |
+| B3 balanced + lr 3e-4 (P17) | 0.188 | 0.593 | 0.357 |
+| D1 filter (control base) | 0.097 | 0.680 | 0.263 |
+| **D2 filter + balanced + lr 3e-4** | **0.497** | **0.857** | **0.630** |
+| criterion | ≥ 0.115 | ≥ 0.58 | ≥ 0.337 |
+
+**D2 holds on tune seeds** (selected over D1 on J_full).
+- Paired diffs vs control:
+  - J_target +0.412, CI [+0.141, +0.683];
+  - J_easy +0.227, CI [−0.061, +0.515];
+  - J_full +0.343, CI [+0.305, +0.381].
+- Attribution vs B3 (the same loop without the filter), positive on every seed:
+  J_target +0.31, J_easy +0.26, J_full +0.27.
+
+Reading:
+- With goal-consistent distillation data, the larger distillation step (lr 3e-4) no longer leaks lifting to
+  table goals. Both ends rise together; the coupling of P14–P19 is gone.
+- D1 at lr 3e-5 shows the mechanism (goal slope 2.4× control) but moves too slowly for 10 rounds.
+
+Held-out as pre-registered: seeds 5–9, paired against the control and against B3 on the same seeds. B3 seeds 8
+and 9 are run fresh.
