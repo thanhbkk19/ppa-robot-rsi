@@ -1,4 +1,18 @@
-# RSI for robots: where the search stands (1 Oct 2026)
+# RSI for robots: where the search stands (2 Oct 2026)
+
+## Update 2 Oct 2026: first held-out-confirmed algorithmic result (P20, `rsi/results/P20_REPORT.md`)
+**Outcome-consistent distillation** confirms on held-out seeds 5–9.
+- Method: commanded-goal rows are distilled only from successful episodes, and hindsight rows from all
+  episodes. Combined with goal-balanced weights and lr 3e-4.
+- Against the best fixed-K control: J_target +0.226 [+0.021, +0.431], J_easy +0.152 [+0.066, +0.238],
+  J_full +0.216 [+0.090, +0.342].
+- Mechanism: mixing failed commanded rows with their hindsight copies labels the same actions with two goals,
+  which makes the diffusion generator goal-blind (slope 0.011).
+- With the filter, the slope is 0.141, and the generator alone reaches 0.47 on in-air goals (from 0.00).
+- This breaks the frontier ↔ easy-goal coupling that sank P14–P19.
+
+Text below this line is the state before this update.
+
 
 Loop studied: sample K chunks from a diffusion policy → select with a learned critic → distil the executed
 chunks back into the policy. This is PA-RL / V-GPS + distillation, run here on a CPU MuJoCo testbed
