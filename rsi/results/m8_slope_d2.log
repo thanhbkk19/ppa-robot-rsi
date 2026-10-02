@@ -1,0 +1,4 @@
+AdroitHandRelocateDense-v1, AdroitHandHammerDense-v1, AdroitHandDoorDense-v1 environment's reward functions were updated in v1.2.1 without an environment version update. Therefore, use gymnasium-robotics==1.2.0 for v1 reproducibility or use v2 in gymnasium-robotics>=1.4.3. See https://github.com/Farama-Foundation/Gymnasium-Robotics/pull/220 for more details
+seed 0 | slope +0.199 | gen mean up h=0 +0.031 | gen mean up h=0.2 +0.159 | p90 h=0.2 +0.191 | pick up h=0.2 +0.186 | 150 held states
+seed 1 | slope +0.144 | gen mean up h=0 +0.056 | gen mean up h=0.2 +0.150 | p90 h=0.2 +0.240 | pick up h=0.2 +0.280 | 150 held states
+seed 2 | slope +0.079 | gen mean up h=0 +0.028 | gen mean up h=0.2 +0.098 | p90 h=0.2 +0.148 | pick up h=0.2 +0.137 | 150 held states

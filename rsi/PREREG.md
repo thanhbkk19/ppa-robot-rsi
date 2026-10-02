@@ -604,3 +604,29 @@ Reading:
 
 Held-out as pre-registered: seeds 5–9, paired against the control and against B3 on the same seeds. B3 seeds 8
 and 9 are run fresh.
+
+Mechanism for D2 (tune-seed models, deployment-only probes, recorded before any held-out result):
+
+M8 goal slope:
+
+| models | goal slope | gen up h = 0 | gen up h = 0.2 | critic pick up h = 0.2 |
+|---|---|---|---|---|
+| control | +0.011 | −0.005 | +0.002 | +0.10 |
+| B3 (same loop, no filter) | −0.009 | +0.031 | +0.024 | +0.10 |
+| D1 (filter, lr 3e-5) | +0.026 | −0.007 | +0.010 | +0.10 |
+| **D2** | **+0.141** | +0.038 | **+0.136** | +0.20 |
+
+M6 success by K:
+
+| D2 | K = 1 | K = 2 | K = 4 | K = 64 |
+|---|---|---|---|---|
+| easy (0–5 cm) | 0.69 | 0.90 | 0.94 | 0.86 |
+| high (10–30 cm) | **0.47** | 0.55 | 0.60 | 0.44 |
+
+Findings:
+- The generator becomes goal-conditioned: slope 13× the control. The coupling is broken at its source.
+- The generator alone succeeds on in-air goals (0.47; 0.00 for every earlier config). Improvement is now
+  carried by the generator, not only by critic selection.
+- The K-inversion is still present, and now on high goals too (seed 0: K = 64 0.22 vs K = 2 0.66). This
+  leaves room for per-goal selection pressure on top. That is a separate test (P21), to be pre-registered
+  before it is run.
