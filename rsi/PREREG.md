@@ -310,3 +310,33 @@ Runs:
 Mechanism to report: the M5 goal slope and the generator's mean up at h = 0 (the leakage to table goals),
 per config.
 If P16 holds on tune seeds → held-out on seeds 3–7 with the same criterion, paired against control.
+
+## P16 verdict (seeds 0–2, partial: the goal-relative arm was stopped at round 3)
+**Fails.**
+- With the goal-relative feature, the loop degrades from round 1:
+  - training success 0.04–0.12 vs 0.26–0.45 without it;
+  - J_easy 0.73 → 0.05–0.32;
+  - critic optimism up to +0.14.
+- Unverified mechanism hypothesis: the explicit goal − object feature makes the trivial hindsight rule
+  ("object did not move ⇒ success for the relabelled goal") easy for the critic, and argmax over 64 exploits it.
+- The plain qgrad η = 0.1 run on the lr 3e-5 base (G3) is kept for attribution.
+
+## Amendment L (written before any balanced run): goal-height-balanced distillation (P17)
+Diagnosis: the curriculum concentrates new data at the frontier, so the distillation set under-represents
+easy goals, and each frontier-pushing update leaks to the table goals (P14 held-out, P15).
+
+Method (`balanced=True`):
+- Importance-weight the distillation loss so that every 2.5 cm goal-height bin carries equal total weight,
+  i.e. the training-goal distribution matches the uniform evaluation range.
+- The weight per row is 1 / max(bin count, 2% of rows).
+
+Configurations on the replay base (argmax K = 64, filtered init, curriculum + HER, 10 rounds, seeds 0–2):
+- B1 balanced (attribution);
+- B2 balanced + qgrad η = 0.1;
+- B3 balanced + distil lr 3e-4.
+
+The B2 / B3 choice is made on seeds 0–2 (tuning budget 2).
+Control: the stability replay runs (J_target 0.085, J_easy 0.63, J_full 0.287).
+
+**P17:** the better of B2/B3 has J_target ≥ control + 0.08 AND J_easy ≥ control − 0.05 AND J_full ≥ control + 0.05.
+If it holds → held-out seeds 3–7 with the same three criteria, paired against `stability_heldout` replay.

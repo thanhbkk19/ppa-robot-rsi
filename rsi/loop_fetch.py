@@ -25,7 +25,7 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
@@ -294,8 +294,17 @@ def run(cfg, out=None):
         nm = int(c["rho"] * len(Sx)); i = rng.integers(0, len(Sd), nm)
         prev = [p.detach().clone() for p in gen.parameters()] if c["expo"] > 0 else None
         old_state = copy.deepcopy(gen.state_dict()) if c["gate"] else None
-        gen.fit(np.concatenate([Sx, Sd[i]]), np.concatenate([Ax, Ad[i]]), c["distill_steps"],
-                c["seed"] * 100 + r, lr=c["distill_lr"])
+        Sfit, Afit = np.concatenate([Sx, Sd[i]]), np.concatenate([Ax, Ad[i]])
+        wfit = None
+        if c["balanced"]:
+            # goal-height-balanced distillation: importance weights so that every 2.5 cm goal-height bin carries the
+            # same total weight (the curriculum otherwise concentrates the data at the frontier and the easy goals
+            # are forgotten). Bins with < 2% of the rows are capped so a handful of rows cannot dominate.
+            hb = np.clip(((Sfit[:, 27] - 0.4247) / 0.025).astype(int), 0, 11)
+            cnt = np.bincount(hb, minlength=12).astype(float)
+            wfit = 1.0 / np.maximum(cnt[hb], 0.02 * len(hb))
+            wfit = wfit / wfit.mean()
+        gen.fit(Sfit, Afit, c["distill_steps"], c["seed"] * 100 + r, lr=c["distill_lr"], w=wfit)
         if prev is not None:   # ExPO-style extrapolation along this round's update: theta += alpha (theta - theta_prev)
             with torch.no_grad():
                 for p, q0 in zip(gen.parameters(), prev):

@@ -30,12 +30,14 @@ def main(pattern, temp=1.0, K=64):
         res = {}
         for h in [0.0, 0.20, 0.30]:
             S2 = Sh.copy(); S2[:, 27] = TABLE + h
+            if S2.shape[1] == 32:   # goal-relative feature present: keep it consistent with the new goal
+                S2[:, 30] = S2[:, 27] - S2[:, 5]
             C = gen.sample(np.repeat(S2, K, 0), 1).reshape(len(S2), K, ACT_DIM); up = C[:, :, UP].mean(-1)
             q = cr(np.concatenate([np.repeat(S2[:, None], K, 1), C], -1)).mean(0)
             res[h] = (up.mean(), np.quantile(up, 0.9), up[np.arange(len(up)), q.argmax(1)].mean())
         tag = path.split('/')[-1]
         seed = tag.split('seed')[1].split('_')[0]
-        print(f"seed {seed} | slope {res[0.30][0] - res[0.0][0]:+.3f} | gen mean up h=0.2 {res[0.2][0]:+.3f} "
+        print(f"seed {seed} | slope {res[0.30][0] - res[0.0][0]:+.3f} | gen mean up h=0 {res[0.0][0]:+.3f} | gen mean up h=0.2 {res[0.2][0]:+.3f} "
               f"| p90 h=0.2 {res[0.2][1]:+.3f} | pick up h=0.2 {res[0.2][2]:+.3f} | {len(Sh)} held states", flush=True)
 
 
