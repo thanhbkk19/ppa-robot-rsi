@@ -538,3 +538,16 @@ Predictions:
   - Seed 1 was OOM-killed at round 4 (memory cgroup, 12 jobs at once) and is being rerun from scratch,
     alone.
   - No verdict until seed 1 finishes.
+
+## P17 held-out verdict (B3 = balanced + distil lr 3e-4, seeds 3–7, paired against `stability_heldout` replay)
+| metric | B3 | control | paired diff | 95% CI | per-seed diffs |
+|---|---|---|---|---|---|
+| J_target | 0.232 | 0.174 | +0.058 | [−0.130, +0.246] | −0.16 +0.12 +0.20 +0.16 −0.03 |
+| J_easy | 0.714 | 0.702 | +0.012 | [−0.069, +0.093] | +0.03 +0.05 −0.06 +0.09 −0.05 |
+| J_full | 0.390 | 0.368 | +0.022 | [−0.112, +0.156] | −0.08 +0.09 +0.16 +0.03 −0.09 |
+
+**Fails** (J_target +0.058 < +0.08; J_full +0.022 < +0.05).
+- Balancing does remove the easy-goal loss that sank P14 held-out (+0.012 vs P14's forgetting).
+- The frontier gain is not reliable: seed 3 never takes off.
+- The control is much stronger on held-out seeds (J_target 0.174) than on tune seeds (0.085), so tune-seed
+  margins over the control are optimistic.
