@@ -517,3 +517,24 @@ Predictions:
   - J_full ≥ control + 0.05 AND J_target ≥ control + 0.03 AND J_easy ≥ control − 0.05.
   - In words: both ends move up, with no trade-off.
 - If it passes → held-out seeds 5–9 against the control and B3 on the same seeds.
+
+## P18b result (fixed-K baselines, tune seeds 0–2, round 10)
+| fixed K | J_target | J_easy | J_full |
+|---|---|---|---|
+| 4 | 0.000 | 0.967 | 0.220 |
+| 16 | 0.005 | 0.903 | 0.253 |
+| 64 (control) | 0.085 | 0.63 | 0.287 |
+
+- Best fixed K on J_full = 64 (the control).
+- Smaller K protects easy goals but never takes off: no seed reaches J_target > 0.015.
+- The trade-off is monotone in K, so no single K serves both ends.
+
+## P19 interim
+- F2 (FAS v2 on the control base), final: J_target 0.058, J_easy 0.883, J_full 0.257 → fails J_full and
+  J_target.
+  - Arms behave as predicted: K = 2 below 5–7.5 cm, 64 above.
+  - Take-off is slower than the control's.
+- F3 (FAS v2 + balanced + qgrad 0.1), round 10, seeds 0 and 2: 0.20/0.77/0.32 and 0.385/0.83/0.43.
+  - Seed 1 was OOM-killed at round 4 (memory cgroup, 12 jobs at once) and is being rerun from scratch,
+    alone.
+  - No verdict until seed 1 finishes.
