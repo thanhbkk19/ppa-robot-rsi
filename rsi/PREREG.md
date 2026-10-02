@@ -249,3 +249,15 @@ Predictions (means over seeds 0–2, round 10):
 
 Mechanism metrics are reported whatever the outcome: M4 lift per decision and M5 goal slope from the saved
 final models.
+
+## Verdicts for P14 (seeds 0–2) — see rsi/results/P14_REPORT.md
+| prediction | result | verdict |
+|---|---|---|
+| P14a lr 3e-4: goal slope ≥ 3 × control AND J_full ≥ control + 0.05 | slope +0.010 vs +0.011; J_full 0.370 vs 0.287 | fails (outcome met, mechanism refuted) |
+| P14b τ = 1.5: lift ≥ +0.03 and J_target ≥ +0.05 | collapses at round 0 (J_easy 0.07–0.09) | fails |
+| P14c both: J_target ≥ +0.08 | collapse | fails |
+
+**New outcome-only hypothesis (written before running it):** distil lr 3e-4 vs 3e-5 on the replay take-off
+base, held-out seeds 3–7. The control reuses `rsi/results/stability_heldout` (replay, lr 3e-5, same
+configuration and seeds). Pass if the mean paired difference in J_full ≥ +0.05 AND in J_target ≥ +0.05 at
+round 10.
