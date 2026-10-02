@@ -27,9 +27,15 @@ class Diffusion(nn.Module):
         self.net = mlp(a_dim + s_dim + 1, a_dim, h)
         self.opt = None
         self.temp = 1.0       # sampling temperature: scales the initial and the per-step noise
+        # goal classifier-free guidance: during training the desired goal (obs dims 25:28) is replaced by a null
+        # value (0, far outside the workspace) with probability goal_drop; sampling uses
+        # eps = eps_null + goal_w (eps_goal - eps_null). goal_w = 1 is the plain conditional model.
+        self.goal_drop, self.goal_w = 0.0, 1.0
 
     def loss(self, S, A, g, w=None):
         n = len(S)
+        if self.goal_drop > 0:
+            S = S.clone(); S[torch.rand(n, generator=g) < self.goal_drop, 25:28] = 0.0
         k = torch.randint(0, self.N, (n,), generator=g); e = torch.randn(n, self.a_dim, generator=g)
         ab = self.al[k][:, None]
         x = ab.sqrt() * A + (1 - ab).sqrt() * e
@@ -56,7 +62,12 @@ class Diffusion(nn.Module):
         S = torch.as_tensor(S, dtype=torch.float32)
         x = self.temp * torch.randn(len(S), self.a_dim, generator=g)
         for k in reversed(range(self.N)):
-            eps = self.net(torch.cat([x, S, torch.full((len(S), 1), k / self.N)], 1))
+            kk = torch.full((len(S), 1), k / self.N)
+            eps = self.net(torch.cat([x, S, kk], 1))
+            if self.goal_w != 1.0:
+                S0 = S.clone(); S0[:, 25:28] = 0.0
+                e0 = self.net(torch.cat([x, S0, kk], 1))
+                eps = e0 + self.goal_w * (eps - e0)
             ab, b = self.al[k], self.b[k]
             x = (x - b / (1 - ab).sqrt() * eps) / (1 - b).sqrt()
             if k > 0:
