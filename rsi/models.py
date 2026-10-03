@@ -155,6 +155,8 @@ def load_system(path):
     st = torch.load(path, weights_only=False, map_location="cpu")
     h = st["gen"]["net.0.weight"].shape[0]
     gen = Diffusion(OBS_DIM, ACT_DIM, h=h); gen.load_state_dict(st["gen"])
+    if "critic" not in st:   # a pretrained (BC) cache file: generator only
+        return gen, None
     cr = Critic(OBS_DIM, ACT_DIM, n_ens=len(st["critic"]), h=h)
     for net, sd in zip(cr.nets, st["critic"]):
         net.load_state_dict(sd)
