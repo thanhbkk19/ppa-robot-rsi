@@ -18,3 +18,4 @@ scale/results/runs.csv.lock
 scale/results/runs.csv.tmp
 *.json.tmp
 rsi/cache/
+scale/results/s0/runs/
