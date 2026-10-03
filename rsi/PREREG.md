@@ -711,3 +711,35 @@ Verdicts are only computed after every run of a block is done. They are reported
 together with the registry rows and wall-clock.
 
 **S3 (second goal-conditioned task):** to be pre-registered separately after a CPU pilot on tune seeds 0–2.
+
+## Amendment Q (written before any push loop run): second task, push take-off by direction (P22, CPU pilot)
+Task (`task="push"`, `rsi/fetch.py`):
+- FetchPush. The goal lies at distance U(0.10, 0.20) m from the object, at angle ±h from the +x axis.
+- Demos come from a scripted pusher (100% success with no noise, 58% at noise 0.45), with front goals only
+  (h ≤ 90°). 600 demos, noise 0.45, filtered BC: the same protocol as pick-and-place.
+- Pushing towards the back requires going around the object, which is never demonstrated.
+
+BC base, generator alone (seed 0, 100 episodes per bin):
+
+| angle | 0–45° | 45–90° | 90–120° | 120–150° | 150–180° |
+|---|---|---|---|---|---|
+| success | 0.19 | 0.15 | 0.06 | 0.02 | 0.03 |
+
+There is a take-off gradient, and the front-goal success is low, so both ends have headroom.
+
+Loop:
+- Identical to P20 except the difficulty axis: train_h [0, π], target eval_h [2π/3, π], easy_h [0, π/4],
+  full_h [0, π].
+- Curriculum, FAS and balanced bins: 12 bins over the angle.
+- Balanced weighting uses each row's remaining push direction |angle(goal − object)|. This is fixed here.
+- Methods: control, B3, D2 with the P20 hyper-parameters unchanged (no tuning for push). Tune seeds 0–2,
+  10 rounds × 400 episodes.
+
+**P22 (pilot gate for S3):** D2 vs control on seeds 0–2, round 10:
+- J_full ≥ +0.05 AND J_target ≥ +0.03 AND J_easy ≥ −0.05 (the P20 criteria).
+
+Outcomes:
+- If it holds → S3 = held-out seeds 10–29 on the GPU host, with the S1 protocol.
+- If it fails → report it, and analyse whether the label contradiction is present at all. Mechanism to
+  report: training success per angle bin (`round_bins`). Prediction: back bins < 20% for most rounds, so the
+  contradiction is present.

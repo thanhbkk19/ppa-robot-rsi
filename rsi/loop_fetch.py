@@ -26,21 +26,23 @@ CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, fas=False, fas_arms=(2, 64), fas_gamma=0.7, fas_reward="progress", fas_gate=False, goal_drop=0.0, goal_w=1.0, distill_filter="none", width=256, ckpt=True, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, fas=False, fas_arms=(2, 64), fas_gamma=0.7, fas_reward="progress", fas_gate=False, goal_drop=0.0, goal_w=1.0, distill_filter="none", width=256, ckpt=True, task="pnp", easy_h=(0.0, 0.05), full_h=(0.0, 0.3), gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
     os.makedirs(CACHE, exist_ok=True)
     tag = ("" if c["demo_goals"] == "env" else f"_{c['demo_goals']}") + ("_filt" if c["demo_filter"] else "") \
         + ("_goalrel" if GOALREL else "") + (f"_gd{c['goal_drop']}" if c["goal_drop"] > 0 else "") \
-        + (f"_h{c['width']}" if c["width"] != 256 else "") + (f"_bc{c['bc_steps']}" if c["bc_steps"] != 15000 else "")
+        + (f"_h{c['width']}" if c["width"] != 256 else "") + (f"_bc{c['bc_steps']}" if c["bc_steps"] != 15000 else "") \
+        + (f"_{c['task']}" if c["task"] != "pnp" else "")
     f = os.path.join(CACHE, f"bc_n{c['n_demo']}_z{c['demo_noise']}{tag}_s{c['seed']}.pt")
     if os.path.exists(f):
         st = torch.load(f, weights_only=False, map_location="cpu")
         gen = Diffusion(OBS_DIM, ACT_DIM, h=c["width"]); gen.load_state_dict(st["gen"])
         gen.goal_drop, gen.goal_w = c["goal_drop"], c["goal_w"]
         return gen, st["S"], st["A"]
-    S, A, Y = collect_demos(c["n_demo"], c["demo_noise"], seed=1000 + c["seed"], table_only=c["demo_goals"] == "table")
+    S, A, Y = collect_demos(c["n_demo"], c["demo_noise"], seed=1000 + c["seed"], table_only=c["demo_goals"] == "table",
+                            task=c["task"])
     if c["demo_filter"]:   # filtered BC: keep only the successful demonstrations
         S, A = S[Y > 0.5], A[Y > 0.5]
     S = S.reshape(-1, OBS_DIM); A = A.reshape(-1, ACT_DIM)
@@ -193,7 +195,7 @@ def run(cfg, out=None):
     gen, Sd, Ad = pretrained(c)
     gen.temp = c["samp_temp"]
     critic = Critic(OBS_DIM, ACT_DIM, c["n_ens"], c["critic_lr"], seed=c["seed"], h=c["width"])
-    envs = Envs(c["n_envs"])
+    envs = Envs(c["n_envs"], c["task"])
     eval_seeds = [900_000 + c["seed"] * 10_000 + i for i in range(c["n_eval"])]
     RX, RY, hist, DS, DA, RXn, RL, RW = [], [], [], [], [], [], [], []
     t0 = time.time()
@@ -206,7 +208,7 @@ def run(cfg, out=None):
         _, _, Yg, _ = episodes(gen, envs, eval_seeds, 1, select_fn(c, critic, rng), rng, h_range=c["eval_h"])
         d = {k: v for k, v in d.items() if not isinstance(v, np.ndarray)}
         if c["extra_evals"]:
-            for tag, hr in (("J_easy", [0.0, 0.05]), ("J_full", [0.0, 0.3])):
+            for tag, hr in (("J_easy", list(c["easy_h"])), ("J_full", list(c["full_h"]))):
                 _, _, Ye, de = episodes(gen, envs, eval_seeds[:100], c["K"], prime(select_fn(c, critic, rng)), rng,
                                         h_range=hr)
                 extra = dict(extra, **{tag: float(Ye.mean())})
@@ -391,7 +393,12 @@ def run(cfg, out=None):
             # goal-height-balanced distillation: importance weights so that every 2.5 cm goal-height bin carries the
             # same total weight (the curriculum otherwise concentrates the data at the frontier and the easy goals
             # are forgotten). Bins with < 2% of the rows are capped so a handful of rows cannot dominate.
-            hb = np.clip(((Sfit[:, 27] - 0.4247) / 0.025).astype(int), 0, 11)
+            if c["task"] == "pnp":
+                hb = np.clip(((Sfit[:, 27] - 0.4247) / 0.025).astype(int), 0, 11)
+            else:   # push: the row's remaining push direction |angle(goal - object)|, 12 bins over train_h
+                ang = np.abs(np.arctan2(Sfit[:, 26] - Sfit[:, 4], Sfit[:, 25] - Sfit[:, 3]))
+                lo, hi = c["train_h"]
+                hb = np.clip(((ang - lo) / (hi - lo) * 12).astype(int), 0, 11)
             cnt = np.bincount(hb, minlength=12).astype(float)
             wfit = 1.0 / np.maximum(cnt[hb], 0.02 * len(hb))
             wfit = wfit / wfit.mean()

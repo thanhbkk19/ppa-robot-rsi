@@ -28,21 +28,34 @@ def obs_vec(o):
 ACT_DIM = 4 * H
 
 
-class Envs:
-    """A list of Fetch envs stepped in lockstep in this process."""
+TASKS = {"pnp": "FetchPickAndPlace-v4", "push": "FetchPush-v4"}
+# push task: the goal lies at distance U(0.10, 0.20) m from the object, at angle +-h from the +x axis (h in [0, pi]);
+# demos cover the front half-plane only (h <= pi/2), so pushing towards the back is never demonstrated.
+PUSH_R = (0.10, 0.20)
+PUSH_BOX = (1.08, 1.52, 0.43, 1.07)        # goal x/y range kept on the table
 
-    def __init__(self, n, task="FetchPickAndPlace-v4"):
-        self.envs = [gym.make(task, max_episode_steps=10_000) for _ in range(n)]
+
+class Envs:
+    """A list of Fetch envs stepped in lockstep in this process. task: "pnp" (pick-and-place, difficulty h = goal
+    height) or "push" (difficulty h = goal direction angle); a gym id is accepted for backwards compatibility."""
+
+    def __init__(self, n, task="pnp"):
+        self.kind = "push" if task in ("push", "FetchPush-v4") else "pnp"
+        self.envs = [gym.make(TASKS.get(task, task), max_episode_steps=10_000) for _ in range(n)]
         self.n = n
 
     def reset(self, seeds, heights=None):
-        """heights: optional goal height above the object's resting height, per env (None = env default
-        goal distribution: on the table or, half of the time, up to 0.45 m in the air)."""
+        """heights: optional per-env difficulty h. pnp: goal height above the object's resting height (None = env
+        default goal distribution). push: goal direction angle, see PUSH_R (None = env default goal)."""
         obs = [e.reset(seed=int(s))[0] for e, s in zip(self.envs, seeds)]
         if heights is not None:
-            for i, (e, h) in enumerate(zip(self.envs, heights)):
+            for i, (e, h, sd) in enumerate(zip(self.envs, heights, seeds)):
                 u = e.unwrapped
-                u.goal = u.goal.copy(); u.goal[2] = obs[i]["achieved_goal"][2] + float(h)
+                u.goal = u.goal.copy()
+                if self.kind == "pnp":
+                    u.goal[2] = obs[i]["achieved_goal"][2] + float(h)
+                else:
+                    u.goal = push_goal(obs[i]["achieved_goal"], float(h), int(sd))
                 obs[i] = u._get_obs()
         return np.stack([obs_vec(o) for o in obs]).astype(np.float32)
 
@@ -73,6 +86,44 @@ class Envs:
         return np.stack(out).astype(np.float32), np.array(succ, float)
 
 
+def push_goal(obj, h, seed):
+    """Goal at angle +-h (sign and distance drawn from the seed), kept on the table: if the drawn sign leaves the
+    table the other sign is used, then the distance is shrunk."""
+    r = np.random.default_rng(seed + 7_777)
+    sgn = 1.0 if r.random() < 0.5 else -1.0; dist = r.uniform(*PUSH_R)
+    x0, x1, y0, y1 = PUSH_BOX
+    for d in (dist, dist * 0.75, PUSH_R[0]):
+        for s in (sgn, -sgn):
+            g = obj + d * np.array([np.cos(s * h), np.sin(s * h), 0.0])
+            if x0 <= g[0] <= x1 and y0 <= g[1] <= y1:
+                return g
+    return g
+
+
+def scripted_push(o, phase, rng, noise):
+    """Scripted pusher. o: (n, 28) obs rows [observation(25), goal(3)]. phase (n,) int, updated in place:
+    0 lift / move above the push-start point, 1 descend, 2 push, 3 hold (object within 2.5 cm of the goal)."""
+    grip, obj, goal = o[:, 0:3], o[:, 3:6], o[:, 25:28]
+    n = len(o); a = np.zeros((n, 4)); a[:, 3] = -1.0
+    d = goal[:, :2] - obj[:, :2]; dist = np.linalg.norm(d, axis=1); dirn = d / np.maximum(dist, 1e-6)[:, None]
+    pre = np.c_[obj[:, :2] - 0.06 * dirn, obj[:, 2]]
+    above = pre + np.array([0, 0, 0.06])
+    phase[dist < 0.025] = 3
+    phase[(phase == 3) & (dist >= 0.04)] = 0
+    phase[(phase == 0) & (np.linalg.norm(grip - above, axis=1) < 0.02)] = 1
+    phase[(phase == 1) & (np.linalg.norm(grip - pre, axis=1) < 0.015)] = 2
+    rel = grip[:, :2] - obj[:, :2]; along = (rel * dirn).sum(1)
+    lat = np.linalg.norm(rel - along[:, None] * dirn, axis=1)
+    phase[(phase == 2) & ((lat > 0.03) | (along > -0.01))] = 0
+    up = np.c_[grip[:, :2], obj[:, 2] + 0.06]
+    t0 = np.where((grip[:, 2] < obj[:, 2] + 0.045)[:, None], up, above)
+    t2 = np.c_[obj[:, :2] + np.minimum(0.03, dist)[:, None] * dirn, obj[:, 2]]
+    tgt = np.select([phase[:, None] == 0, phase[:, None] == 1, phase[:, None] == 2], [t0, pre, t2], grip)
+    a[:, :3] = 10.0 * (tgt - grip)
+    a[:, :3] += noise * rng.standard_normal((n, 3))
+    return np.clip(a, -1, 1)
+
+
 def scripted(o, phase, rng, noise):
     """Noisy pick-and-place controller. o: (n, 28). phase: (n,) int state, updated in place."""
     grip, obj, goal = o[:, 0:3], o[:, 3:6], o[:, 25:28]
@@ -92,14 +143,21 @@ def scripted(o, phase, rng, noise):
     return np.clip(a, -1, 1)
 
 
-def collect_demos(n_eps, noise, seed, n_envs=50, table_only=False):
+def collect_demos(n_eps, noise, seed, n_envs=50, table_only=False, task="pnp"):
     """Scripted episodes -> (S, A chunks, success). S rows: [obs(28), t/NDEC].
-    table_only: every demo goal lies on the table (height 0), so lifting is never demonstrated."""
+    table_only: pnp: every demo goal lies on the table (height 0), so lifting is never demonstrated.
+                push: every demo goal lies in the front half-plane (angle <= pi/2), so pushing backwards is not."""
     rng = np.random.default_rng(seed)
-    E = Envs(n_envs)
+    E = Envs(n_envs, task)
+    policy = scripted_push if E.kind == "push" else scripted
     S, A, Ys = [], [], []
     for b in range(0, n_eps, n_envs):
-        o = E.reset([seed * 100_000 + b + i for i in range(n_envs)], heights=np.zeros(n_envs) if table_only else None)
+        sds = [seed * 100_000 + b + i for i in range(n_envs)]
+        if E.kind == "push":
+            hs = np.random.default_rng(seed * 100_000 + b).uniform(0, np.pi / 2 if table_only else np.pi, n_envs)
+        else:
+            hs = np.zeros(n_envs) if table_only else None
+        o = E.reset(sds, heights=hs)
         phase = np.zeros(n_envs, int)
         # per-episode noise level: a mixture of good and sloppy operators
         lvl = noise * rng.exponential(1.0, n_envs)[:, None]
@@ -109,7 +167,7 @@ def collect_demos(n_eps, noise, seed, n_envs=50, table_only=False):
             ch = np.zeros((n_envs, H, 4))
             cur = o
             for h in range(H):
-                ch[:, h] = np.clip(scripted(cur, phase, rng, 0.0) + lvl * rng.standard_normal((n_envs, 4)), -1, 1)
+                ch[:, h] = np.clip(policy(cur, phase, rng, 0.0) + lvl * rng.standard_normal((n_envs, 4)), -1, 1)
                 if h < n_steps:
                     # step each env one action so the controller is closed-loop inside the chunk
                     nxt = []
