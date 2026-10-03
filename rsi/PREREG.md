@@ -743,3 +743,29 @@ Outcomes:
 - If it fails → report it, and analyse whether the label contradiction is present at all. Mechanism to
   report: training success per angle bin (`round_bins`). Prediction: back bins < 20% for most rounds, so the
   contradiction is present.
+
+## P22 verdict (push pilot, tune seeds 0–2, round 10) — **fails; S3 is not added to the GPU grid**
+| method | J_target (120–180°) | J_easy (0–45°) | J_full (0–180°) |
+|---|---|---|---|
+| round 0 (BC, all methods) | 0.005–0.025 | 0.23–0.24 | 0.10–0.15 |
+| control | 0.025 | 0.120 | 0.067 |
+| B3 | 0.028 | 0.117 | 0.070 |
+| D2 | 0.037 | 0.120 | 0.077 |
+
+D2 vs control: J_full +0.010 [−0.015, +0.035], J_target +0.012, J_easy +0.000.
+
+The base loop itself does not self-improve on push. Every method ends *below* its round 0. The P20 fix has nothing
+to act on.
+
+Mechanism:
+- Training success falls from ≈ 0.10 (round 1, untrained critic = generator samples) to 0.01–0.02 at round 2,
+  the first round selected by the critic. It stays at 0.04–0.09 afterwards.
+- The critic is strongly over-optimistic about its own picks: opt0 = +0.17 to +0.54 (predicted success
+  0.3–0.6 vs ≈ 0.05 realised).
+- The generator alone stays flat (J_gen 0.01–0.04 on targets). The loss is in selection: the K-inversion of the
+  first phase of this project, in a regime with sparse successes, where the critic's ranking signal is weak and
+  argmax over 64 exploits its errors.
+- Success vs K at deployment: `rsi/results/m6_kgoal_push_p22_s*.log`, to be added below when done.
+
+Reading: outcome-consistent distillation fixes the distillation data. It does not make a poor selector good.
+The P20 claim stays scoped to loops whose critic selection already improves the frontier, as in pick-and-place.
