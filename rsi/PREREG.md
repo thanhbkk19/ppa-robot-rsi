@@ -769,3 +769,19 @@ Mechanism:
 
 Reading: outcome-consistent distillation fixes the distillation data. It does not make a poor selector good.
 The P20 claim stays scoped to loops whose critic selection already improves the frontier, as in pick-and-place.
+
+P22 addendum: success vs K at deployment (round-10 push models, 100 episodes per cell). Means over seeds 0–2:
+
+| method | easy K = 1 / 2 / 4 / 64 | back goals K = 1 / 2 / 4 / 64 |
+|---|---|---|
+| control | 0.10 / 0.13 / 0.15 / 0.14 | 0.02 / 0.03 / 0.03 / 0.03 |
+| B3 | 0.08 / 0.11 / 0.11 / 0.10 | 0.02 / 0.04 / 0.05 / 0.02 |
+| D2 | 0.08 / 0.10 / 0.08 / 0.12 | 0.02 / 0.04 / 0.04 / 0.04 |
+
+- The generators themselves degraded: easy K = 1 success is 0.08–0.10 vs 0.19–0.23 for the BC start.
+- Success hardly depends on K, so the critic has almost no ranking signal on push.
+- The loop distils near-random selections and slowly erodes the generator, with no improvement signal to offset
+  it.
+- Per-goal K choice (FAS / P21) cannot create the missing signal, so it is not pre-registered for push.
+- The open problem on push is the critic: a sparse-success regime, about 5–10% at the start. That is a
+  different question from P20.
