@@ -16,26 +16,28 @@ import numpy as np
 import torch
 
 from rsi.fetch import Envs, NDEC, STEPS, H, OBS_DIM, ACT_DIM, collect_demos, GOALREL
-from rsi.models import Diffusion, Critic
+from rsi.models import Diffusion, Critic, DEV, cpu_state
 from rsi.loop_nav import chi2_weights
 
 torch.set_num_threads(1)
 ROOT = os.path.dirname(os.path.abspath(__file__))
+RESULTS = os.environ.get("RSI_RESULTS", os.path.join(ROOT, "results"))   # scale-up runs write elsewhere
 CACHE = os.path.join(ROOT, "cache")
 
 DEF = dict(rule="argmax", K=4, seed=0, rounds=6, n_train=400, n_eval=200, n_envs=50, rho=0.1,
            n_demo=600, demo_noise=0.45, bc_steps=15000, distill_steps=1500, distill_lr=3e-5,
-           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, fas=False, fas_arms=(2, 64), fas_gamma=0.7, fas_reward="progress", fas_gate=False, goal_drop=0.0, goal_w=1.0, distill_filter="none", gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
+           critic_steps=2000, critic_lr=3e-4, n_ens=2, distill_data="round", critic_target="mc", rb=False, rb_draws=4, demo_goals="env", demo_filter=False, expo=0.0, extra_evals=False, samp_temp=1.0, qgrad_eta=0.0, balanced=False, fas=False, fas_arms=(2, 64), fas_gamma=0.7, fas_reward="progress", fas_gate=False, goal_drop=0.0, goal_w=1.0, distill_filter="none", width=256, ckpt=True, gate=False, n_gate=100, gate_z=1.0, train_h=None, eval_h=None, curriculum=False, her=False, boot=False, z=1.0, beta=0.1, temp=0.05, kappa=1.0, delta=1.0)
 
 
 def pretrained(c):
     os.makedirs(CACHE, exist_ok=True)
     tag = ("" if c["demo_goals"] == "env" else f"_{c['demo_goals']}") + ("_filt" if c["demo_filter"] else "") \
-        + ("_goalrel" if GOALREL else "") + (f"_gd{c['goal_drop']}" if c["goal_drop"] > 0 else "")
+        + ("_goalrel" if GOALREL else "") + (f"_gd{c['goal_drop']}" if c["goal_drop"] > 0 else "") \
+        + (f"_h{c['width']}" if c["width"] != 256 else "") + (f"_bc{c['bc_steps']}" if c["bc_steps"] != 15000 else "")
     f = os.path.join(CACHE, f"bc_n{c['n_demo']}_z{c['demo_noise']}{tag}_s{c['seed']}.pt")
     if os.path.exists(f):
-        st = torch.load(f, weights_only=False)
-        gen = Diffusion(OBS_DIM, ACT_DIM); gen.load_state_dict(st["gen"])
+        st = torch.load(f, weights_only=False, map_location="cpu")
+        gen = Diffusion(OBS_DIM, ACT_DIM, h=c["width"]); gen.load_state_dict(st["gen"])
         gen.goal_drop, gen.goal_w = c["goal_drop"], c["goal_w"]
         return gen, st["S"], st["A"]
     S, A, Y = collect_demos(c["n_demo"], c["demo_noise"], seed=1000 + c["seed"], table_only=c["demo_goals"] == "table")
@@ -43,8 +45,8 @@ def pretrained(c):
         S, A = S[Y > 0.5], A[Y > 0.5]
     S = S.reshape(-1, OBS_DIM); A = A.reshape(-1, ACT_DIM)
     torch.manual_seed(c["seed"])
-    gen = Diffusion(OBS_DIM, ACT_DIM); gen.goal_drop = c["goal_drop"]; gen.fit(S, A, c["bc_steps"], c["seed"])
-    torch.save(dict(gen=gen.state_dict(), S=S, A=A, demo_success=float(Y.mean())), f)
+    gen = Diffusion(OBS_DIM, ACT_DIM, h=c["width"]); gen.goal_drop = c["goal_drop"]; gen.fit(S, A, c["bc_steps"], c["seed"])
+    torch.save(dict(gen=cpu_state(gen), S=S, A=A, demo_success=float(Y.mean())), f + ".tmp"); os.replace(f + ".tmp", f)
     gen.opt = None; gen.goal_w = c["goal_w"]
     return gen, S, A
 
@@ -61,12 +63,12 @@ def select_fn(c, critic, rng):
             # (the DPG action-improvement step) and keep the moved version where the critic scores it higher.
             # C is modified in place, so the executed chunk is the improved one.
             Xt = torch.as_tensor(np.concatenate([np.repeat(S[:, None], K, 1), C], -1).reshape(-1, S.shape[1] + C.shape[2]),
-                                 dtype=torch.float32)
+                                 dtype=torch.float32, device=DEV)
             act = Xt[:, S.shape[1]:].clone().requires_grad_(True)
             Q = torch.stack([net(torch.cat([Xt[:, :S.shape[1]], act], 1)).squeeze(-1) for net in critic.nets]).mean(0)
             g, = torch.autograd.grad(Q.sum(), act)
             g = g / g.norm(dim=1, keepdim=True).clamp_min(1e-8)
-            Cp = (act.detach() + c["qgrad_eta"] * g).clamp(-1, 1).numpy().reshape(C.shape)
+            Cp = (act.detach() + c["qgrad_eta"] * g).clamp(-1, 1).cpu().numpy().reshape(C.shape)
             qa = critic(np.concatenate([np.repeat(S[:, None], K, 1), C], -1)).mean(0)
             qb = critic(np.concatenate([np.repeat(S[:, None], K, 1), Cp], -1)).mean(0)
             better = qb > qa
@@ -190,7 +192,7 @@ def run(cfg, out=None):
     rng = np.random.default_rng(c["seed"]); torch.manual_seed(c["seed"])
     gen, Sd, Ad = pretrained(c)
     gen.temp = c["samp_temp"]
-    critic = Critic(OBS_DIM, ACT_DIM, c["n_ens"], c["critic_lr"], seed=c["seed"])
+    critic = Critic(OBS_DIM, ACT_DIM, c["n_ens"], c["critic_lr"], seed=c["seed"], h=c["width"])
     envs = Envs(c["n_envs"])
     eval_seeds = [900_000 + c["seed"] * 10_000 + i for i in range(c["n_eval"])]
     RX, RY, hist, DS, DA, RXn, RL, RW = [], [], [], [], [], [], [], []
@@ -267,8 +269,39 @@ def run(cfg, out=None):
         b = rng.choice(nb, size=n, p=p / p.sum())
         return edges[b] + rng.random(n) * (edges[b + 1] - edges[b])
 
-    evaluate(0, {})
-    for r in range(1, c["rounds"] + 1):
+    # per-round checkpoint (resumable runs): everything the next round reads. RNG states are restored too, so
+    # an interrupted run continues exactly as an uninterrupted one would.
+    ck_path = out[:-5] + ".ckpt.pt" if (out and c["ckpt"]) else None
+
+    def save_ckpt(r):
+        st = dict(r=r, gen=cpu_state(gen), gen_opt=gen.opt.state_dict() if gen.opt else None,
+                  critic=[cpu_state(n) for n in critic.nets], critic_opts=[o.state_dict() for o in critic.opts],
+                  critic_g=critic.g.get_state(), critic_trained=critic.trained,
+                  buf=dict(RX=RX, RY=RY, DS=DS, DA=DA, RXn=RXn, RL=RL, RW=RW), hist=hist,
+                  succ_n=succ_n, tot_n=tot_n, m_last=m_last, fas_s=fas_s, fas_n=fas_n,
+                  rng=rng.bit_generator.state, torch_rng=torch.get_rng_state(), elapsed=time.time() - t0)
+        torch.save(st, ck_path + ".tmp"); os.replace(ck_path + ".tmp", ck_path)
+
+    r0 = 1
+    if ck_path and os.path.exists(ck_path):
+        st = torch.load(ck_path, weights_only=False, map_location="cpu")
+        gen.load_state_dict(st["gen"])
+        if st["gen_opt"] is not None:
+            gen.opt = torch.optim.Adam(gen.parameters(), c["distill_lr"]); gen.opt.load_state_dict(st["gen_opt"])
+        for n, o, sd, so in zip(critic.nets, critic.opts, st["critic"], st["critic_opts"]):
+            n.load_state_dict(sd); o.load_state_dict(so)
+        critic.g.set_state(st["critic_g"]); critic.trained = st["critic_trained"]
+        bufs = dict(RX=RX, RY=RY, DS=DS, DA=DA, RXn=RXn, RL=RL, RW=RW)
+        for k, v in st["buf"].items():
+            bufs[k][:] = v
+        hist[:] = st["hist"]; succ_n[:] = st["succ_n"]; tot_n[:] = st["tot_n"]; m_last[:] = st["m_last"]
+        fas_s[:] = st["fas_s"]; fas_n[:] = st["fas_n"]
+        rng.bit_generator.state = st["rng"]; torch.set_rng_state(st["torch_rng"])
+        t0 -= st["elapsed"]
+        r0 = st["r"] + 1
+    else:
+        evaluate(0, {})
+    for r in range(r0, c["rounds"] + 1):
         seeds = [100_000_000 + c["seed"] * 1_000_000 + r * 10_000 + i for i in range(c["n_train"])]
         sel = prime(select_fn(c, critic, rng), train=True)
         hts = curriculum_heights(len(seeds)) if c["curriculum"] else None
@@ -392,15 +425,19 @@ def run(cfg, out=None):
             from rsi.probe import probe
             extra["probe"] = probe(gen, critic, select_fn(c, critic, rng), c["K"], c["seed"] * 100 + r, rng=rng)
         evaluate(r, extra)
+        if ck_path:
+            save_ckpt(r)
     if out:   # final generator + critic, for mechanism analysis (git-ignored)
-        torch.save(dict(gen=gen.state_dict(), critic=[n.state_dict() for n in critic.nets]), out[:-5] + ".pt")
+        torch.save(dict(gen=cpu_state(gen), critic=[cpu_state(n) for n in critic.nets]), out[:-5] + ".pt")
+    if ck_path and os.path.exists(ck_path):
+        os.remove(ck_path)
     return dict(cfg=c, hist=hist)
 
 
 def job(args):
     name, cfg = args
-    key = "_".join(f"{k}{v}" for k, v in sorted(cfg.items()))
-    out = os.path.join(ROOT, "results", name, key + ".json")
+    from rsi.runkey import run_key
+    out = os.path.join(RESULTS, name, run_key(cfg) + ".json")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if os.path.exists(out) and json.load(open(out)).get("done"):
         return

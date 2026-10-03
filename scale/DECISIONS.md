@@ -74,3 +74,17 @@
 - oracle, frozen_selector and filtered_bc_true do not read V, so they are run once (under the topdown verifier; their
   J is identical in both regimes) and shared by both regime tables.
 - Two concurrent jobs gave no throughput gain (2 runs in ≈ 1 550 s vs 740 s for one), so runs are sequential.
+
+## 2026-10-03 — D9: RSI scale-up uses the Fetch take-off testbed, not the PPA M4 grid
+- The PPA programme (M1–M4 on Square) was superseded by the RSI search in `rsi/` (`docs/RSI_STATUS.md`). Its
+  held-out-confirmed result, outcome-consistent distillation (`rsi/results/P20_REPORT.md`), lives on the Fetch
+  take-off testbed: goal-conditioned, with table-only demos and in-air targets.
+- Why not Square: the label contradiction behind P20 needs a goal-conditioned task, where the same actions can be
+  relabelled with a different goal. Square has a single goal, so the effect cannot appear there.
+- Scale-up = S1 (20 fresh seeds, 20 rounds) and S2 (4× data, 2× width), pre-registered in `rsi/PREREG.md`
+  Amendment P. Same learner (diffusion generator + MC critic ensemble), GPU via `RSI_DEVICE=cuda`.
+- Fairness: the control is the best fixed-K configuration (P18b). B3 is the identical loop without the filter.
+  All configs are frozen from P20, with no tuning on the scale-up seeds.
+- Concurrency: unlike Square (simulation-bound with 48 async workers, no gain from parallel runs), the Fetch
+  loop steps its envs in-process on one core. So runs are parallelised across seeds, and the number of workers
+  comes from the S0 profile (`scale/rsi_profile.py`).

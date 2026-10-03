@@ -670,3 +670,44 @@ Against B3 (the identical loop without the outcome filter), on the same seeds:
 Attribution for FAS (extra, not a verdict): F3 vs B2 on seeds 5–9 gives J_easy +0.228 [+0.121, +0.335],
 J_target +0.059 [−0.164, +0.282], J_full +0.070 [−0.098, +0.238]. The easy-goal protection of the per-goal
 step size is reliable; its frontier effect is not.
+
+## Amendment P (written 3 Oct 2026, before any scale-up run): scale-up of P20 on the RTX 5090 host
+Setup:
+- Code: `rsi/loop_fetch.py` with `RSI_DEVICE=cuda`. The CPU path is verified bit-identical to the pre-change
+  code on a reference run.
+- Runs are resumable per round; an interrupted-then-resumed run is verified bit-identical to an uninterrupted
+  one.
+- Runner `scale/rsi_run.py`, specs `scale/rsi_specs.py`, verdicts `scale/rsi_summarize.py` (which reproduces the
+  P20 held-out tables exactly).
+- Configs are frozen from P20; nothing is re-tuned.
+- Seeds 10–29 are fresh. Seeds 0–9 are never used for any verdict below.
+
+**S1 (replication with power, longer horizon).**
+- Methods: control, B3, D2 (P20 configs). Seeds 10–29 (20 seeds), 20 rounds × 400 training episodes.
+- S1a (primary, round 10, the P20 horizon), D2 vs control: J_full ≥ +0.05 with paired 95% CI excluding 0,
+  J_target ≥ +0.03, J_easy ≥ −0.05.
+  - Prediction: J_full diff in [+0.10, +0.30].
+- S1b (persistence, round 20): D2 vs control J_full paired CI excludes 0.
+  - Prediction: the diff is still ≥ +0.10. The control's goal-blind generator keeps the frontier ↔ easy-goal
+    coupling, so more rounds do not close the gap.
+- S1c (attribution, rounds 10 and 20): D2 vs B3 J_full paired CI excludes 0. At 5 seeds the diff was +0.102,
+  CI [−0.022, +0.226].
+  - Prediction: holds at both rounds.
+- Mechanism (reported, no criterion): goal slope (M8) and K-by-goal (M6) on the final models of seeds 10–14
+  for each method.
+  - Prediction: D2 slope ≥ 5× control.
+
+**S2 (data and model scale).**
+- Methods: control, B3, D2. Seeds 10–19, 10 rounds.
+- 4× training episodes per round (1600), 2× network width (512), 2× critic and distillation steps
+  (4000 / 3000). The same scaling applies to every method; lr and all else are unchanged.
+- S2a: D2 vs control at round 10, the same three criteria as S1a.
+  - Prediction: holds. More data does not remove the label contradiction, because failures at the frontier
+    still dominate the commanded in-air rows.
+- Reported without a criterion: control S2 vs control S1 at round 10 (does 4× data close the gap?), and
+  D2 vs B3.
+
+Verdicts are only computed after every run of a block is done. They are reported in `scale/results/<block>/REPORT.md`
+together with the registry rows and wall-clock.
+
+**S3 (second goal-conditioned task):** to be pre-registered separately after a CPU pilot on tune seeds 0–2.

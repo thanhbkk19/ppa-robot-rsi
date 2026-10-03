@@ -2,7 +2,7 @@
 Evaluate a saved take-off model (generator + critic) on easy (0-5 cm) and high (10-30 cm) goals with K in {1, 2, 4, 64}.
 usage: python -m rsi.analysis_kgoal <glob of .pt>"""
 import sys, glob, numpy as np, torch
-from rsi.models import Diffusion, Critic
+from rsi.models import Diffusion, Critic, load_system
 from rsi.fetch import Envs, NDEC, OBS_DIM, ACT_DIM, H, STEPS
 from rsi.loop_fetch import heights_for
 
@@ -23,11 +23,7 @@ def evaluate(gen, cr, K, h_range, n=100, seed=0):
 
 
 for path in sorted(glob.glob(sys.argv[1])):
-    st = torch.load(path, weights_only=False)
-    gen = Diffusion(OBS_DIM, ACT_DIM); gen.load_state_dict(st["gen"])
-    cr = Critic(OBS_DIM, ACT_DIM, n_ens=len(st["critic"]))
-    for net, sd in zip(cr.nets, st["critic"]):
-        net.load_state_dict(sd)
+    gen, cr = load_system(path)
     seed = path.split('seed')[1].split('_')[0]
     row = {K: (evaluate(gen, cr, K, [0.0, 0.05]), evaluate(gen, cr, K, [0.1, 0.3])) for K in [1, 2, 4, 64]}
     print(f"seed {seed} | easy  K=1/2/4/64: " + " / ".join(f"{row[K][0]:.2f}" for K in row)

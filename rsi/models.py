@@ -1,8 +1,25 @@
-"""Generic conditional DDPM generator and MC critic ensemble (PyTorch, CPU-friendly)."""
+"""Generic conditional DDPM generator and MC critic ensemble (PyTorch, CPU-friendly).
+
+Device: RSI_DEVICE=cuda puts every network, batch and random generator on the GPU (default cpu). Inputs and
+outputs stay numpy on the host. On cpu the code path, and so every result, is unchanged.
+"""
 from __future__ import annotations
+import os
 import numpy as np
 import torch
 import torch.nn as nn
+
+DEV = torch.device(os.environ.get("RSI_DEVICE", "cpu"))
+
+
+def gen_on(seed):
+    """A seeded random generator on the compute device."""
+    return torch.Generator(device=DEV).manual_seed(int(seed))
+
+
+def cpu_state(module):
+    """state_dict with every tensor on the cpu (checkpoints load anywhere)."""
+    return {k: v.detach().cpu() for k, v in module.state_dict().items()}
 
 
 def mlp(i, o, h=256, n=3):
@@ -31,38 +48,40 @@ class Diffusion(nn.Module):
         # value (0, far outside the workspace) with probability goal_drop; sampling uses
         # eps = eps_null + goal_w (eps_goal - eps_null). goal_w = 1 is the plain conditional model.
         self.goal_drop, self.goal_w = 0.0, 1.0
+        self.to(DEV)
 
     def loss(self, S, A, g, w=None):
         n = len(S)
         if self.goal_drop > 0:
-            S = S.clone(); S[torch.rand(n, generator=g) < self.goal_drop, 25:28] = 0.0
-        k = torch.randint(0, self.N, (n,), generator=g); e = torch.randn(n, self.a_dim, generator=g)
+            S = S.clone(); S[torch.rand(n, generator=g, device=DEV) < self.goal_drop, 25:28] = 0.0
+        k = torch.randint(0, self.N, (n,), generator=g, device=DEV)
+        e = torch.randn(n, self.a_dim, generator=g, device=DEV)
         ab = self.al[k][:, None]
         x = ab.sqrt() * A + (1 - ab).sqrt() * e
         l = ((self.net(torch.cat([x, S, k[:, None] / self.N], 1)) - e) ** 2).mean(1)
         return l.mean() if w is None else (w * l).sum() / w.sum().clamp_min(1e-8)
 
     def fit(self, S, A, steps, seed, lr=1e-3, batch=256, w=None):
-        g = torch.Generator().manual_seed(seed)
-        S = torch.as_tensor(S, dtype=torch.float32); A = torch.as_tensor(A, dtype=torch.float32)
-        W = None if w is None else torch.as_tensor(w, dtype=torch.float32)
+        g = gen_on(seed)
+        S = torch.as_tensor(S, dtype=torch.float32, device=DEV); A = torch.as_tensor(A, dtype=torch.float32, device=DEV)
+        W = None if w is None else torch.as_tensor(w, dtype=torch.float32, device=DEV)
         if self.opt is None:
             self.opt = torch.optim.Adam(self.parameters(), lr)
         for gr in self.opt.param_groups:
             gr["lr"] = lr
         for _ in range(steps):
-            i = torch.randint(0, len(S), (batch,), generator=g)
+            i = torch.randint(0, len(S), (batch,), generator=g, device=DEV)
             loss = self.loss(S[i], A[i], g, None if W is None else W[i])
             self.opt.zero_grad(); loss.backward(); self.opt.step()
         return loss.item()
 
     @torch.no_grad()
     def sample(self, S, seed):
-        g = torch.Generator().manual_seed(int(seed))
-        S = torch.as_tensor(S, dtype=torch.float32)
-        x = self.temp * torch.randn(len(S), self.a_dim, generator=g)
+        g = gen_on(seed)
+        S = torch.as_tensor(S, dtype=torch.float32, device=DEV)
+        x = self.temp * torch.randn(len(S), self.a_dim, generator=g, device=DEV)
         for k in reversed(range(self.N)):
-            kk = torch.full((len(S), 1), k / self.N)
+            kk = torch.full((len(S), 1), k / self.N, device=DEV)
             eps = self.net(torch.cat([x, S, kk], 1))
             if self.goal_w != 1.0:
                 S0 = S.clone(); S0[:, 25:28] = 0.0
@@ -71,8 +90,8 @@ class Diffusion(nn.Module):
             ab, b = self.al[k], self.b[k]
             x = (x - b / (1 - ab).sqrt() * eps) / (1 - b).sqrt()
             if k > 0:
-                x += self.temp * self.sig2[k].sqrt() * torch.randn(x.shape, generator=g)
-        return x.clamp(-1, 1).numpy()
+                x += self.temp * self.sig2[k].sqrt() * torch.randn(x.shape, generator=g, device=DEV)
+        return x.clamp(-1, 1).cpu().numpy()
 
 
 class Critic:
@@ -80,20 +99,20 @@ class Critic:
 
     def __init__(self, s_dim, a_dim, n_ens=2, lr=3e-4, seed=0, h=256):
         torch.manual_seed(seed)
-        self.nets = [mlp(s_dim + a_dim, 1, h) for _ in range(n_ens)]
+        self.nets = [mlp(s_dim + a_dim, 1, h).to(DEV) for _ in range(n_ens)]
         self.opts = [torch.optim.Adam(n.parameters(), lr) for n in self.nets]
-        self.g = torch.Generator().manual_seed(seed + 1)
+        self.g = gen_on(seed + 1)
         self.trained = False
 
     def fit(self, X, y, steps=2000, batch=512, wboot=None):
         """wboot [N, n_ens]: per-row bootstrap weights (Poisson(1) per episode) -> each member is fit on its own
         bootstrap resample, so ensemble disagreement estimates the critic's statistical error."""
-        X = torch.as_tensor(X, dtype=torch.float32); y = torch.as_tensor(y, dtype=torch.float32)
-        W = None if wboot is None else torch.as_tensor(wboot, dtype=torch.float32)
+        X = torch.as_tensor(X, dtype=torch.float32, device=DEV); y = torch.as_tensor(y, dtype=torch.float32, device=DEV)
+        W = None if wboot is None else torch.as_tensor(wboot, dtype=torch.float32, device=DEV)
         for m, (net, opt) in enumerate(zip(self.nets, self.opts)):
             for _ in range(steps):
                 if W is None:
-                    i = torch.randint(0, len(X), (batch,), generator=self.g)
+                    i = torch.randint(0, len(X), (batch,), generator=self.g, device=DEV)
                 else:
                     i = torch.multinomial(W[:, m], batch, replacement=True, generator=self.g)
                 loss = ((net(X[i]).squeeze(-1) - y[i]) ** 2).mean()
@@ -105,12 +124,12 @@ class Critic:
         """SARSA targets on executed chunks: y_t = Q_targ(s_{t+1}, a_{t+1}) for t < T-1, y_{T-1} = success.
         Lower-variance than MC (future randomness is replaced by its estimate), biased by bootstrapping."""
         import copy
-        X = torch.as_tensor(X, dtype=torch.float32); Xn = torch.as_tensor(Xn, dtype=torch.float32)
-        last = torch.as_tensor(last, dtype=torch.bool); y = torch.as_tensor(y, dtype=torch.float32)
+        X = torch.as_tensor(X, dtype=torch.float32, device=DEV); Xn = torch.as_tensor(Xn, dtype=torch.float32, device=DEV)
+        last = torch.as_tensor(last, dtype=torch.bool, device=DEV); y = torch.as_tensor(y, dtype=torch.float32, device=DEV)
         if not hasattr(self, "targs"):
             self.targs = [copy.deepcopy(n) for n in self.nets]
         for _ in range(steps):
-            i = torch.randint(0, len(X), (batch,), generator=self.g)
+            i = torch.randint(0, len(X), (batch,), generator=self.g, device=DEV)
             with torch.no_grad():
                 qn = torch.stack([t(Xn[i]).squeeze(-1) for t in self.targs]).mean(0)
                 tgt = torch.where(last[i], y[i], qn)
@@ -126,5 +145,18 @@ class Critic:
 
     @torch.no_grad()
     def __call__(self, X):
-        X = torch.as_tensor(X, dtype=torch.float32)
-        return np.stack([n(X).squeeze(-1).numpy() for n in self.nets])
+        X = torch.as_tensor(X, dtype=torch.float32, device=DEV)
+        return torch.stack([n(X).squeeze(-1) for n in self.nets]).cpu().numpy()
+
+
+def load_system(path):
+    """Load a saved (generator, critic) pair from rsi/loop_fetch.py, inferring the network width."""
+    from rsi.fetch import OBS_DIM, ACT_DIM
+    st = torch.load(path, weights_only=False, map_location="cpu")
+    h = st["gen"]["net.0.weight"].shape[0]
+    gen = Diffusion(OBS_DIM, ACT_DIM, h=h); gen.load_state_dict(st["gen"])
+    cr = Critic(OBS_DIM, ACT_DIM, n_ens=len(st["critic"]), h=h)
+    for net, sd in zip(cr.nets, st["critic"]):
+        net.load_state_dict(sd)
+    cr.trained = True
+    return gen, cr

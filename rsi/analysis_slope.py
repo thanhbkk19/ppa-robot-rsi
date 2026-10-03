@@ -1,7 +1,7 @@
 """M5 summary over many saved models: generator goal slope (mean up at h=0.30 minus h=0 at fixed held states),
 generator p90 up at h=0.20, and critic-pick up at h=0.20. usage: python -m rsi.analysis_slope <glob of .pt> [temp]"""
 import sys, glob, numpy as np, torch
-from rsi.models import Diffusion, Critic
+from rsi.models import Diffusion, Critic, load_system
 from rsi.fetch import Envs, NDEC, OBS_DIM, ACT_DIM, H, STEPS
 
 UP = [2, 6, 10, 14]; TABLE = 0.4247
@@ -21,11 +21,7 @@ def held_states(gen, cr, K=64, n=40, seed=0):
 
 def main(pattern, temp=1.0, K=64):
     for path in sorted(glob.glob(pattern)):
-        st = torch.load(path, weights_only=False)
-        gen = Diffusion(OBS_DIM, ACT_DIM); gen.load_state_dict(st["gen"]); gen.temp = temp
-        cr = Critic(OBS_DIM, ACT_DIM, n_ens=len(st["critic"]))
-        for net, sd in zip(cr.nets, st["critic"]):
-            net.load_state_dict(sd)
+        gen, cr = load_system(path); gen.temp = temp
         Sh = held_states(gen, cr)
         res = {}
         for h in [0.0, 0.20, 0.30]:
