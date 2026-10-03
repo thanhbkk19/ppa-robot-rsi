@@ -11,6 +11,12 @@
 - With the filter, the slope is 0.141, and the generator alone reaches 0.47 on in-air goals (from 0.00).
 - This breaks the frontier ↔ easy-goal coupling that sank P14–P19.
 
+Scale-up (3 Oct 2026):
+- `scale/RSI_SCALEUP.md` gives one command for the RTX 5090 host: S1 = 20 fresh seeds × 20 rounds,
+  S2 = 4× data and 2× width (pre-registered: `rsi/PREREG.md` Amendment P).
+- A second task (push by direction, P22 pilot) failed: the base loop collapses there because the critic has no
+  ranking signal. So it is not in the GPU grid, and the P20 claim is scoped to loops whose selection works.
+
 Text below this line is the state before this update.
 
 

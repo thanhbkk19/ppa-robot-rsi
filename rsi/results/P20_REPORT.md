@@ -79,3 +79,11 @@ B3 config from P17, this gives D2.
 - The method-development search used about 15 configs on tune seeds 0–2 across P13–P20. The held-out test of
   D2 was run once. The comparator received the K and distil-lr tuning of earlier milestones.
 - Seeds 3 and 4 were used for a mechanism diagnosis (M6), so held-out tests from P18 on use seeds 5–9.
+
+## Addendum (3 Oct 2026): second task (push by direction, P22) — negative
+- On FetchPush with front-only demos, back-goal targets and the same loop and hyper-parameters, every method
+  degrades from round 0, and D2 = control.
+- Cause: the base loop does not self-improve there. The critic has almost no ranking signal (deployment success
+  is flat in K, opt0 is +0.17 to +0.54), and distilling its selections erodes the generator.
+- Scope of the P20 claim: outcome-consistent distillation removes the frontier ↔ easy-goal coupling in loops
+  whose critic selection already pushes the frontier. It does not substitute for a working selector.

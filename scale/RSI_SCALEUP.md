@@ -6,6 +6,9 @@ What it tests: whether outcome-consistent distillation (P20, `rsi/results/P20_RE
 
 The pre-registered criteria are in `rsi/PREREG.md`, Amendment P.
 
+S3 (a second task) was gated on a CPU pilot (P22, push by direction). The pilot failed, so S3 is not part of this
+grid; see `rsi/PREREG.md`, P22 verdict.
+
 ## One-time setup
 ```bash
 git fetch origin claude/session-hardware-info-tasocb && git checkout claude/session-hardware-info-tasocb
