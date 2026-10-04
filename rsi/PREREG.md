@@ -795,3 +795,10 @@ P22 addendum: success vs K at deployment (round-10 push models, 100 episodes per
 - Not independent of S1: S1 uses the same seeds and code, so its round-10 numbers for seeds 10–19 will be close
   to these. This is a preview of S1a / S1c, not extra evidence on top of S1. S1's 20 seeds, 20 rounds and S2 still
   need the GPU host.
+
+## Amendment R verdict (S1 CPU preview, seeds 10–19, round 10) — **S1a and S1c both hold**
+- S1a, D2 vs control: J_full +0.223 [+0.122, +0.324], J_target +0.216 [+0.105, +0.327],
+  J_easy +0.224 [+0.110, +0.338]; 10/10 seeds positive on every metric.
+- S1c, D2 vs B3: J_full +0.141 [+0.030, +0.252] (8/10), J_easy +0.214 [+0.134, +0.294],
+  J_target +0.141 [+0.031, +0.251].
+- Details: `scale/results/s1cpu/REPORT.md`. S1b (20 rounds) and S2 (scale) still need the GPU host.
