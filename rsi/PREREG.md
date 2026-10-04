@@ -785,3 +785,13 @@ P22 addendum: success vs K at deployment (round-10 push models, 100 episodes per
 - Per-goal K choice (FAS / P21) cannot create the missing signal, so it is not pre-registered for push.
 - The open problem on push is the critic: a sparse-success regime, about 5–10% at the start. That is a
   different question from P20.
+
+## Amendment R (written 4 Oct 2026, before any run): CPU preview of S1 while the GPU host is unavailable
+- Same configs and code as S1 (control, B3, D2, frozen from P20). Seeds 10–19, 10 rounds × 400 episodes, on this
+  4-core CPU container. Results go to `scale/results/s1cpu/`.
+- Criteria: S1a and S1c at round 10, unchanged.
+  - S1a: D2 vs control, J_full ≥ +0.05 with CI > 0, J_target ≥ +0.03, J_easy ≥ −0.05.
+  - S1c: D2 vs B3, J_full CI > 0.
+- Not independent of S1: S1 uses the same seeds and code, so its round-10 numbers for seeds 10–19 will be close
+  to these. This is a preview of S1a / S1c, not extra evidence on top of S1. S1's 20 seeds, 20 rounds and S2 still
+  need the GPU host.
