@@ -31,3 +31,7 @@ plugin_rm_topdown_b0.02_mc_852d36809c_s0,m4tune,17d46dc,852d36809c,0,done,752,20
 plugin_rm_topdown_b0.02_mc_852d36809c_s1,m4tune,17d46dc,852d36809c,1,done,793,2026-10-01 09:25:54
 plugin_rm_topdown_b0.02_mc_852d36809c_s2,m4tune,17d46dc,852d36809c,2,done,757,2026-10-01 09:38:32
 plugin_rm_topdown_b0.02_mc_b529f4f0ae_s0,m4tune,17d46dc,b529f4f0ae,0,running,,2026-10-01 09:38:32
+rsi_s1cpu_16eb7bfe17_s10,s1cpu,f116191,16eb7bfe17,10,running(try 1),,2026-10-04 14:59:48
+rsi_s1cpu_50f7075150_s10,s1cpu,f116191,50f7075150,10,running(try 1),,2026-10-04 14:59:48
+rsi_s1cpu_189cdb0695_s10,s1cpu,f116191,189cdb0695,10,running(try 1),,2026-10-04 14:59:48
+rsi_s1cpu_50f7075150_s11,s1cpu,f116191,50f7075150,11,running(try 1),,2026-10-04 14:59:48
