@@ -19,7 +19,7 @@ export MUJOCO_GL=egl
 
 ## Run everything (resumable: rerun the same command after any interruption)
 ```bash
-nohup bash scale/rsi_pipeline.sh > scale/results/logs/pipeline_rsi.out 2>&1 &
+mkdir -p scale/results/logs && nohup bash scale/rsi_pipeline.sh > scale/results/logs/pipeline_rsi.out 2>&1 &
 ```
 Steps:
 1. Checks CUDA, then runs the unit tests.

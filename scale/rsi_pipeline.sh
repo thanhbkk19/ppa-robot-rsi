@@ -10,6 +10,10 @@ mkdir -p scale/results/logs scale/results/s1 scale/results/s2
 
 python -c "import torch; assert torch.cuda.is_available() or '$RSI_DEVICE' == 'cpu', 'no CUDA device'; print(torch.__version__, torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu')"
 pytest -q tests >/dev/null && echo "unit tests ok"
+# GPU smoke test (~5 min): device, a short run, checkpoint/resume on the GPU. Stops the pipeline on failure.
+[ -f scale/results/logs/gpu_smoke.ok ] || { python scale/rsi_gpu_smoke.py 2>&1 | tee scale/results/logs/gpu_smoke.log; \
+  grep -q "SMOKE OK" scale/results/logs/gpu_smoke.log && touch scale/results/logs/gpu_smoke.ok; } 
+[ -f scale/results/logs/gpu_smoke.ok ] || { echo "GPU smoke test failed: see scale/results/logs/gpu_smoke.log"; exit 1; }
 
 if [ -z "$WORKERS" ]; then
   [ -f scale/results/s0/profile.json ] || python scale/rsi_profile.py 2>&1 | tee scale/results/logs/s0.log
